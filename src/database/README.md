@@ -8,7 +8,7 @@
 2. `sql/functions/save_guild_settings.sql`の全文を貼り、Runを押します。
 3. 成功後、変更したBotを再起動し、`/youkai-settei`を開きます。
 
-このSQLは既存テーブルに`digest_time`（通知時刻）を追加し、保存用のDB関数を作ります。
+このSQLは既存テーブルに`notification_time`（通知時刻）を追加し、保存用のDB関数を作ります。
 既存の通知時刻は18:00になります。適用済みのSQLを再実行しても設定は初期化しません。
 先にSQLを適用してください。未適用の状態では、設定画面の読み込み・保存でエラーになります。
 コマンド名・項目の登録内容は変えていないため、この変更だけなら`npm run deploy`は不要です。
@@ -57,6 +57,21 @@ await saveTaskSettings(guildId, 3, ["洗い物", "ごみ出し"]);
 
 個別の変更用には`saveGuildSettings()`・`saveLocationNames()`・`saveTaskTypeNames()`も利用できます。
 複数の変更をまとめて確定したい画面では、上の2つの関数を使ってください。
+
+## 未送信通知の定時配信
+
+最初に`sql/migrations/20261024_notification_delivery.sql`をSupabaseのSQL Editorで実行し、
+`notification_jobs.sent_at`と未送信検索用インデックスを追加します。
+
+Bot起動中は30秒ごとに各Guildの設定を確認し、`notification_time`がそのGuildの`timezone`で
+現在時刻と一致したとき、`notification_jobs.sent_at is null`の行をまとめて通知します。
+Discordへの送信に成功した後だけ`sent_at`を保存します。送信失敗時は未送信のまま残り、同じ時刻枠で再試行します。
+
+- `presence`・`shadow`はプライバシー保護のため場所を表示せず、件数だけ通知する。
+- `birth`・`level_up`・`weaken`・`ascend`も現在は件数で通知する。
+- 未送信行が0件ならDiscordへ投稿しない。
+- Botが通知時刻の1分間を通して停止していた場合、その日の通知は翌日の指定時刻まで待つ。
+- 実DBへは、設定保存SQL、通知配信migration、必要ならPR #5のevent type migrationの順で適用する。
 
 ## 定期報告用のデータ取得
 

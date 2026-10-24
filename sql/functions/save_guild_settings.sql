@@ -2,20 +2,20 @@ begin;
 
 -- 既存テーブルに通知時刻を追加。既存サーバーは18:00を引き継ぐ。
 alter table public.guild_settings
-  add column if not exists digest_time time without time zone not null default '18:00:00';
+  add column if not exists notification_time time without time zone not null default '18:00:00';
 
 do $$
 begin
   if not exists (
     select 1 from pg_constraint
     where conrelid = 'public.guild_settings'::regclass
-      and conname = 'guild_settings_digest_time_check'
+      and conname = 'guild_settings_notification_time_check'
   ) then
     alter table public.guild_settings
-      add constraint guild_settings_digest_time_check check (
-        digest_time < time '24:00:00'
-        and extract(minute from digest_time) in (0, 30)
-        and extract(second from digest_time) = 0
+      add constraint guild_settings_notification_time_check check (
+        notification_time < time '24:00:00'
+        and extract(minute from notification_time) in (0, 30)
+        and extract(second from notification_time) = 0
       );
   end if;
 end;
@@ -109,9 +109,9 @@ begin
       then p_settings ->> 'notification_channel_id' else notification_channel_id end,
     admin_channel_id = case when p_settings ? 'admin_channel_id'
       then p_settings ->> 'admin_channel_id' else admin_channel_id end,
-    digest_time = make_time(
-      coalesce((p_settings ->> 'digest_hour')::integer, extract(hour from digest_time)::integer),
-      coalesce((p_settings ->> 'digest_minute')::integer, extract(minute from digest_time)::integer),
+    notification_time = make_time(
+      coalesce((p_settings ->> 'digest_hour')::integer, extract(hour from notification_time)::integer),
+      coalesce((p_settings ->> 'digest_minute')::integer, extract(minute from notification_time)::integer),
       0
     ),
     birth_threshold = case when p_settings ? 'birth_threshold'

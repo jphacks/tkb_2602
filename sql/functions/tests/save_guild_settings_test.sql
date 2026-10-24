@@ -19,7 +19,7 @@ begin
     array[' 流し ', '流し', '会議室'], array['洗い物', 'ごみ出し']);
   if not exists (
     select 1 from public.guild_settings where guild_id = v_guild
-      and digest_time = time '19:30' and birth_threshold = 3
+      and notification_time = time '19:30' and birth_threshold = 3
       and notification_channel_id = '111111111111111111'
       and admin_channel_id = '222222222222222222'
   ) then raise exception '初回の設定保存に失敗'; end if;
@@ -37,7 +37,7 @@ begin
     or not exists (select 1 from public.task_types where id = v_task and not is_active and yokai_key = v_key)
   then raise exception '削除せずに無効化する処理に失敗'; end if;
   if not exists (select 1 from public.guild_settings where guild_id = v_guild
-    and digest_time = time '19:30' and notification_channel_id = '111111111111111111' and birth_threshold = 5)
+    and notification_time = time '19:30' and notification_channel_id = '111111111111111111' and birth_threshold = 5)
   then raise exception '部分更新で他の設定が失われた'; end if;
   if not exists (select 1 from public.locations where guild_id = v_other and name = '流し' and is_active)
   then raise exception '他サーバーの一覧が変更された'; end if;
@@ -56,7 +56,7 @@ begin
   -- 時と分は片方だけ変えられる。null指定のチャンネルは解除できる。
   perform public.save_guild_settings(v_guild, '{"digest_minute":0,"notification_channel_id":null}');
   if not exists (select 1 from public.guild_settings where guild_id = v_guild
-    and digest_time = time '19:00' and notification_channel_id is null and admin_channel_id = '222222222222222222')
+    and notification_time = time '19:00' and notification_channel_id is null and admin_channel_id = '222222222222222222')
   then raise exception '時刻・チャンネルの部分更新に失敗'; end if;
 
   begin
@@ -94,7 +94,7 @@ begin
     perform public.save_guild_settings(v_guild, '{"digest_hour":21,"birth_threshold":9}', array['失敗時に残ってはいけない場所'], array['新規雑務']);
     raise exception '妖怪キーの不足が検出されなかった';
   exception when sqlstate '22023' then null; end;
-  if not exists (select 1 from public.guild_settings where guild_id = v_guild and digest_time = time '19:00' and birth_threshold = 5)
+  if not exists (select 1 from public.guild_settings where guild_id = v_guild and notification_time = time '19:00' and birth_threshold = 5)
     or exists (select 1 from public.locations where guild_id = v_guild and name = '失敗時に残ってはいけない場所')
     or not exists (select 1 from public.locations where id = v_location and is_active)
   then raise exception '保存途中の失敗がロールバックされなかった'; end if;
