@@ -95,9 +95,11 @@ await test("/summaryの手動通知", async (t) => {
 
     assert.deepEqual(target.calls[0], { method: "deferReply", args: [] });
     assert.match(target.calls[1].args[0].content, /未報告だった変化は \*\*3件\*\*/);
+    assert.match(target.calls[1].args[0].content, /\*\*あらいわすれ坊\*\*/);
+    assert.match(target.calls[1].args[0].content, /\*\*ゴミため坊\*\*/);
     assert.deepEqual(
       target.calls[1].args[0].embeds.map((embed) => embed.title),
-      ["妖怪誕生：洗い物の妖怪", "成仏：ゴミ出しの妖怪"],
+      ["妖怪誕生：あらいわすれ坊", "成仏：ゴミため坊"],
     );
     assert.equal(target.calls[1].args[0].files.length, 2);
     assert.match(target.calls[1].args[0].files[0].attachment, /yokai_Y01_lv1\.png$/);

@@ -9,6 +9,7 @@ import {
   type PendingNotificationJob,
 } from "../database/notification-jobs.js";
 import { getNow } from "../time.js";
+import { displayYokaiName } from "./yokai-catalog.js";
 
 const POLL_INTERVAL_MS = 60_000;
 const handledSlots = new Map<string, string>();
@@ -81,8 +82,16 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[]): string
   return [
     "## 👻 妖怪だより",
     `未報告だった変化は **${jobs.length}件** です。`,
-    ...eventTypes.map((type) =>
-      `- ${EVENT_LABELS[type] ?? type}：${counts.get(type)}件`),
+    ...eventTypes.flatMap((type) => [
+      `- ${EVENT_LABELS[type] ?? type}：${counts.get(type)}件`,
+      ...jobs
+        .filter((job) =>
+          job.eventType === type &&
+          (type === "birth" || type === "ascend") &&
+          job.yokaiId
+        )
+        .map((job) => `  - **${displayYokaiName(job.yokaiName, job.imageKey)}**`),
+    ]),
   ].join("\n");
 }
 
@@ -99,7 +108,7 @@ export function buildNotificationDigestMessages(
     const chunk = featured.slice(from, from + 10);
     const files: NonNullable<NotificationMessage["files"]> = [];
     const embeds = chunk.map((job) => {
-      const name = job.yokaiName ?? "名前未設定の妖怪";
+      const name = displayYokaiName(job.yokaiName, job.imageKey);
       const title = `${EVENT_LABELS[job.eventType] ?? job.eventType}：${name}`;
       const path = imagePath(job.imageKey);
       if (!path || !job.imageKey) return { title };

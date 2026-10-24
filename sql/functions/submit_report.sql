@@ -175,7 +175,20 @@ begin
       ascended_at = null,
       yokai_name = case
         when v_stage = 'active'
-          then coalesce(yokai_name, v_task_name || 'の妖怪')
+          and (yokai_name is null or yokai_name = v_task_name || 'の妖怪')
+          then case v_yokai_key
+            when 'Y01' then 'あらいわすれ坊'
+            when 'Y02' then 'ゴミため坊'
+            when 'Y03' then 'おきっぱ小僧'
+            when 'Y04' then 'つくえふさぎ'
+            when 'Y05' then 'もどらずピペット'
+            when 'Y06' then 'あかり喰い'
+            when 'Y07' then 'ふきっぱ風神'
+            when 'Y08' then 'ひえひえ忘れん坊'
+            when 'Y09' then 'ほこりもくもく'
+            when 'Y10' then 'からっぽ狸'
+            else v_task_name || 'の妖怪'
+          end
         else yokai_name
       end,
       image_key = case
