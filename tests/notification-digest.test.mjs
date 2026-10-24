@@ -37,7 +37,7 @@ await test("notification_jobsの定時通知", async (t) => {
       { id: "job-1", event_type: "presence" },
       { id: "job-2", event_type: "presence" },
       { id: "job-3", event_type: "shadow" },
-      { id: "job-4", event_type: "birth" },
+      { id: "job-4", event_type: "birth", yokai_id: "yokai-1" },
       { id: "job-5", event_type: "level_up" },
     ];
     reads = [];
@@ -85,6 +85,16 @@ await test("notification_jobsの定時通知", async (t) => {
       const offset = Number(url.searchParams.get("offset") ?? 0);
       return respond(offset === 0 ? jobs : []);
     }
+    // 誕生・成仏の妖怪の名前を引くための読み込み
+    if (table === "yokai_states") {
+      return respond([{ id: "yokai-1", location_id: "loc-1", task_type_id: "task-1" }]);
+    }
+    if (table === "locations") {
+      return respond([{ id: "loc-1", name: "流し" }]);
+    }
+    if (table === "task_types") {
+      return respond([{ id: "task-1", yokai_key: "Y01" }]);
+    }
     if (table === "notification_jobs" && request.method === "PATCH") {
       assert.equal(url.searchParams.get("sent_at"), "is.null");
       assert.match(url.searchParams.get("id"), /^in\.\(/);
@@ -124,6 +134,7 @@ await test("notification_jobsの定時通知", async (t) => {
     assert.match(messages[0], /気配：2件/);
     assert.match(messages[0], /影：1件/);
     assert.match(messages[0], /妖怪誕生：1件/);
+    assert.match(messages[0], /流しの \*\*あらいわすれ坊\*\*/); // 誕生は名前つきで出す
     assert.match(messages[0], /レベルアップ：1件/);
     assert.deepEqual(updates, [{ sent_at: now.toISOString() }]);
     const ascensionIndex = reads.findIndex((call) => call.table === "process_yokai_ascensions");
@@ -164,6 +175,16 @@ await test("notification_jobsの定時通知", async (t) => {
     await runScheduledNotifications(client, async () => now);
     assert.equal(messages.length, 1);
     assert.equal(updates.length, 1);
+  });
+
+  await t.test("名前が取れなかった誕生・成仏は件数だけで出す", () => {
+    const text = formatNotificationDigest([
+      { id: "a", eventType: "birth", yokaiId: "unknown" },
+      { id: "b", eventType: "ascend", yokaiId: "y-2" },
+    ], new Map([["y-2", { locationName: "冷蔵庫", yokaiKey: "Y08" }]]));
+    assert.match(text, /妖怪誕生：1件/);
+    assert.match(text, /成仏：1件\n {2}- 冷蔵庫の \*\*ひえひえ忘れん坊\*\*/);
+    assert.doesNotMatch(text, /unknown/);
   });
 
   await t.test("通知文は未知のevent_typeも件数表示する", () => {

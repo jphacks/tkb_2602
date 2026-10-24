@@ -10,7 +10,50 @@ export type NotificationSchedule = {
 export type PendingNotificationJob = {
   id: string;
   eventType: string;
+  yokaiId?: string;
 };
+
+// まとめ通知で妖怪の名前を出すための情報（場所の名前と、妖怪の種類 Y01〜Y10）
+export type YokaiSummary = {
+  locationName: string;
+  yokaiKey: string | null;
+};
+
+// 妖怪のIDから、場所の名前と妖怪の種類を引く（誕生・成仏を名前つきで出すため）
+export async function getYokaiSummaries(
+  guildId: string,
+  yokaiIds: string[],
+): Promise<Map<string, YokaiSummary>> {
+  const result = new Map<string, YokaiSummary>();
+  const ids = [...new Set(yokaiIds)];
+  if (ids.length === 0) return result;
+
+  const states = await supabase
+    .from("yokai_states")
+    .select("id, location_id, task_type_id")
+    .eq("guild_id", guildId)
+    .in("id", ids);
+  if (states.error) throw new Error(`妖怪の情報の取得に失敗しました: ${states.error.message}`);
+
+  const [locations, taskTypes] = await Promise.all([
+    supabase.from("locations").select("id, name").eq("guild_id", guildId)
+      .in("id", [...new Set(states.data.map((s) => s.location_id as string))]),
+    supabase.from("task_types").select("id, yokai_key").eq("guild_id", guildId)
+      .in("id", [...new Set(states.data.map((s) => s.task_type_id as string))]),
+  ]);
+  if (locations.error) throw new Error(`場所の取得に失敗しました: ${locations.error.message}`);
+  if (taskTypes.error) throw new Error(`雑務の取得に失敗しました: ${taskTypes.error.message}`);
+
+  const locationNames = new Map(locations.data.map((l) => [l.id as string, l.name as string]));
+  const yokaiKeys = new Map(taskTypes.data.map((t) => [t.id as string, t.yokai_key as string | null]));
+  for (const state of states.data) {
+    result.set(state.id as string, {
+      locationName: locationNames.get(state.location_id as string) ?? "どこか",
+      yokaiKey: yokaiKeys.get(state.task_type_id as string) ?? null,
+    });
+  }
+  return result;
+}
 
 export async function processYokaiAscensions(
   guildId: string,
@@ -35,6 +78,7 @@ type ScheduleRow = {
 type JobRow = {
   id: string;
   event_type: string;
+  yokai_id?: string | null;
 };
 
 type PageResult<T> = {
@@ -83,7 +127,7 @@ export async function getPendingNotificationJobs(
   const rows = await readAllPages<JobRow>(
     (from, to) => supabase
       .from("notification_jobs")
-      .select("id, event_type")
+      .select("id, event_type, yokai_id")
       .eq("guild_id", guildId)
       .is("sent_at", null)
       .order("id")
@@ -92,7 +136,7 @@ export async function getPendingNotificationJobs(
     "未送信通知",
   );
 
-  return rows.map((row) => ({ id: row.id, eventType: row.event_type }));
+  return rows.map((row) => ({ id: row.id, eventType: row.event_type, yokaiId: row.yokai_id ?? undefined }));
 }
 
 export async function markNotificationJobsSent(

@@ -2,11 +2,17 @@ import type { Client } from "discord.js";
 import {
   getNotificationSchedules,
   getPendingNotificationJobs,
+  getYokaiSummaries,
   markNotificationJobsSent,
   processYokaiAscensions,
   type PendingNotificationJob,
+  type YokaiSummary,
 } from "../database/notification-jobs.js";
 import { getNow } from "../time.js";
+import { yokaiName } from "./yokai-catalog.js";
+
+// 誕生と成仏は、どの妖怪かを名前で出す（ほかの出来事は件数だけ）
+const NAMED_EVENT_TYPES = new Set(["birth", "ascend"]);
 
 const POLL_INTERVAL_MS = 60_000;
 const handledSlots = new Map<string, string>();
@@ -52,7 +58,18 @@ function normalizeNotificationTime(value: string): string {
   return `${match[1]}:${match[2]}`;
 }
 
-export function formatNotificationDigest(jobs: PendingNotificationJob[]): string {
+export function formatNotificationDigest(
+  jobs: PendingNotificationJob[],
+  yokai: Map<string, YokaiSummary> = new Map(),
+): string {
+  // 誕生・成仏した妖怪を「場所の 名前」で並べる（情報が取れなかったものは件数だけになる）
+  const namedLines = (type: string) =>
+    jobs
+      .filter((job) => job.eventType === type && job.yokaiId && yokai.has(job.yokaiId))
+      .map((job) => {
+        const summary = yokai.get(job.yokaiId!)!;
+        return `  - ${summary.locationName}の **${yokaiName(summary.yokaiKey)}**`;
+      });
   const counts = new Map<string, number>();
   for (const job of jobs) {
     counts.set(job.eventType, (counts.get(job.eventType) ?? 0) + 1);
@@ -65,9 +82,23 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[]): string
   return [
     "## 👻 妖怪だより",
     `未報告だった変化は **${jobs.length}件** です。`,
-    ...eventTypes.map((type) =>
-      `- ${EVENT_LABELS[type] ?? type}：${counts.get(type)}件`),
+    ...eventTypes.flatMap((type) => [
+      `- ${EVENT_LABELS[type] ?? type}：${counts.get(type)}件`,
+      ...(NAMED_EVENT_TYPES.has(type) ? namedLines(type) : []),
+    ]),
   ].join("\n");
+}
+
+// 誕生・成仏した妖怪の名前を引く。失敗しても、まとめ通知は件数だけで送れるようにする
+async function getNamedYokai(guildId: string, jobs: PendingNotificationJob[]) {
+  const ids = jobs.filter((job) => NAMED_EVENT_TYPES.has(job.eventType) && job.yokaiId).map((job) => job.yokaiId!);
+  if (ids.length === 0) return new Map<string, YokaiSummary>();
+  try {
+    return await getYokaiSummaries(guildId, ids);
+  } catch (error) {
+    console.error("[通知] 妖怪の名前を取得できなかったので、件数だけで送ります", error);
+    return new Map<string, YokaiSummary>();
+  }
 }
 
 export class NotificationDeliveryInProgressError extends Error {
@@ -95,7 +126,7 @@ export async function deliverPendingNotifications(
     const jobs = await getPendingNotificationJobs(guildId);
     if (jobs.length === 0) return 0;
 
-    await send(formatNotificationDigest(jobs));
+    await send(formatNotificationDigest(jobs, await getNamedYokai(guildId, jobs)));
     await markNotificationJobsSent(jobs.map((job) => job.id), sentAt);
     return jobs.length;
   } finally {
