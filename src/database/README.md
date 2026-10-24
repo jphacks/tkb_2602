@@ -65,7 +65,8 @@ await saveTaskSettings(guildId, 3, ["洗い物", "ごみ出し"]);
 
 Bot起動中は30秒ごとに各Guildの設定を確認し、`notification_time`がそのGuildの`timezone`で
 現在時刻と一致したとき、`notification_jobs.sent_at is null`の行をまとめて通知します。
-Discordへの送信に成功した後だけ`sent_at`を保存します。送信失敗時は未送信のまま残り、同じ時刻枠で再試行します。
+`/summary`を使うと、同じ未送信行をその場で集計し、コマンドを使ったチャンネルへ全員に見える形で通知できます。
+定時通知・手動通知とも、Discordへの送信成功後にだけ`sent_at`を更新します。送信失敗時は未送信のまま残り、定時通知は同じ時刻枠で再試行します。
 
 - `presence`・`shadow`はプライバシー保護のため場所を表示せず、件数だけ通知する。
 - `birth`・`level_up`・`weaken`・`ascend`も現在は件数で通知する。

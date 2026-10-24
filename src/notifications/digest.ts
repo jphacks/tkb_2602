@@ -9,6 +9,7 @@ import { getNow } from "../time.js";
 
 const POLL_INTERVAL_MS = 30_000;
 const handledSlots = new Map<string, string>();
+const deliveringGuilds = new Set<string>();
 
 const EVENT_LABELS: Record<string, string> = {
   presence: "気配",
@@ -68,6 +69,37 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[]): string
   ].join("\n");
 }
 
+export class NotificationDeliveryInProgressError extends Error {
+  constructor() {
+    super("このサーバーの通知は別の処理で送信中です");
+    this.name = "NotificationDeliveryInProgressError";
+  }
+}
+
+// 定時通知と /summary が同じ処理を使うことで、集計内容と送信済み判定を揃える。
+// Discordへの送信に成功するまでは sent_at を更新しない。
+export async function deliverPendingNotifications(
+  guildId: string,
+  sentAt: Date,
+  send: (content: string) => Promise<unknown>,
+): Promise<number> {
+  if (deliveringGuilds.has(guildId)) {
+    throw new NotificationDeliveryInProgressError();
+  }
+
+  deliveringGuilds.add(guildId);
+  try {
+    const jobs = await getPendingNotificationJobs(guildId);
+    if (jobs.length === 0) return 0;
+
+    await send(formatNotificationDigest(jobs));
+    await markNotificationJobsSent(jobs.map((job) => job.id), sentAt);
+    return jobs.length;
+  } finally {
+    deliveringGuilds.delete(guildId);
+  }
+}
+
 export async function runScheduledNotifications(
   client: Client,
   nowForGuild: (guildId: string) => Promise<Date> = getNow,
@@ -83,16 +115,20 @@ export async function runScheduledNotifications(
       if (handledSlots.get(schedule.guildId) === slot) continue;
       handledSlots.set(schedule.guildId, slot);
 
-      const jobs = await getPendingNotificationJobs(schedule.guildId);
-      if (jobs.length === 0) continue;
-
-      const channel = await client.channels.fetch(schedule.channelId);
-      if (!channel?.isSendable()) {
-        throw new Error(`通知先チャンネル ${schedule.channelId} にメッセージを送信できません`);
+      const count = await deliverPendingNotifications(
+        schedule.guildId,
+        now,
+        async (content) => {
+          const channel = await client.channels.fetch(schedule.channelId);
+          if (!channel?.isSendable()) {
+            throw new Error(`通知先チャンネル ${schedule.channelId} にメッセージを送信できません`);
+          }
+          await channel.send({ content });
+        },
+      );
+      if (count > 0) {
+        console.log(`[通知] Guild ${schedule.guildId}: ${count}件を送信しました`);
       }
-      await channel.send({ content: formatNotificationDigest(jobs) });
-      await markNotificationJobsSent(jobs.map((job) => job.id), now);
-      console.log(`[通知] Guild ${schedule.guildId}: ${jobs.length}件を送信しました`);
     } catch (error) {
       handledSlots.delete(schedule.guildId);
       console.error(`[通知] Guild ${schedule.guildId} の送信に失敗しました`, error);
