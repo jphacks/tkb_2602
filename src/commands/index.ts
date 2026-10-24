@@ -9,4 +9,12 @@ import { youkaiSettei } from "./youkai-settei.js";
 
 // ボットが持つコマンドの一覧（1番）
 // 新しいコマンドを作ったら、ここに足すだけで登録と振り分けの両方に反映される
-export const commands: Command[] = [youkai, mamorigami, youkaiSettei, youkaiJunbi, summary, now, demo];
+export const commands: Command[] = [
+  youkai,
+  mamorigami,
+  youkaiSettei,
+  youkaiJunbi,
+  summary,
+  now,
+  demo,
+];
