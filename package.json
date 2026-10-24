@@ -7,6 +7,7 @@
     "start": "tsx src/index.ts",
     "deploy": "tsx src/deploy-commands.ts",
     "seed": "tsx scripts/seed-test-data.ts",
+    "test": "node --import tsx --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
