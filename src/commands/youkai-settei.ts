@@ -27,11 +27,10 @@ import {
 import type { Command } from "./types.js";
 
 // /youkai-settei：管理者用の設定（1番）
-//   1枚目のモーダル：まとめ通知のチャンネル・管理者のチャンネル・まとめ通知の時刻・出現回数・場所の一覧
+//   1枚目のモーダル：まとめ通知のチャンネル・管理者のチャンネル・まとめ通知の時刻・何度目に妖怪が出現するか・場所の一覧
 //   2枚目のモーダル：やり残されていたことの一覧（モーダルは1枚に5項目までなので分ける）
 // 開くたびに今の設定が入った状態で開くので、直したいところだけ書き換えればよい
 
-const MAX_ITEMS = 24; // /youkai の選択メニューは25個まで。「一覧にない」の分を1つ空けておく
 const MAX_NAME_LENGTH = 50;
 
 // 「1行に1つ」で書かれた一覧を名前の配列にする。空行と重複は取り除く
@@ -39,7 +38,6 @@ function parseList(text: string) {
   const names = [...new Set(text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))];
   const errors: string[] = [];
   if (names.length === 0) errors.push("1つ以上書いてください");
-  if (names.length > MAX_ITEMS) errors.push(`${MAX_ITEMS}個までにしてください（いま ${names.length}個）`);
   const tooLong = names.filter((name) => name.length > MAX_NAME_LENGTH);
   if (tooLong.length > 0) errors.push(`${MAX_NAME_LENGTH}文字までにしてください：${tooLong.join("、")}`);
   return { names, errors };
@@ -75,7 +73,7 @@ function hourOptions(current: number) {
 
 function thresholdOptions(current: number) {
   return Array.from({ length: 9 }, (_, i) => i + 2).map((count) => ({
-    label: `${count}回`,
+    label: `${count}度目`,
     value: String(count),
     default: count === current,
   }));
@@ -103,7 +101,7 @@ function listInput(customId: string, names: string[], placeholder: string) {
 export const youkaiSettei: Command = {
   data: new SlashCommandBuilder()
     .setName("youkai-settei")
-    .setDescription("【管理者用】場所の一覧・まとめ通知・出現回数などを設定します")
+    .setDescription("【管理者用】場所の一覧・まとめ通知・妖怪が出現するタイミングなどを設定します")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild) // サーバー管理の権限がない人には見えない
     .setContexts(InteractionContextType.Guild), // サーバーの中でだけ使える
 
@@ -119,23 +117,24 @@ export const youkaiSettei: Command = {
       .addLabelComponents(
         new LabelBuilder()
           .setLabel("まとめ通知を送るチャンネル")
+          .setDescription("研究室の全員がいるチャンネル。その日に出現した妖怪などを毎日まとめて送ります")
           .setChannelSelectMenuComponent(
             channelMenu("youkai-settei:notify", "例：#妖怪だより", settings.notificationChannelId),
           ),
         new LabelBuilder()
-          .setLabel("管理者に「ひとこと」を届けるチャンネル")
-          .setDescription("管理者だけが見られるチャンネルを選んでください")
+          .setLabel("「ひとこと」を届けるチャンネル")
+          .setDescription("管理者だけが見られるチャンネル。ひとことは書かれたらすぐに届きます")
           .setChannelSelectMenuComponent(
             channelMenu("youkai-settei:admin", "例：#管理者", settings.adminChannelId),
           ),
-        new LabelBuilder().setLabel("まとめ通知の時刻").setStringSelectMenuComponent(
+        new LabelBuilder().setLabel("まとめ通知を送る時刻").setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId("youkai-settei:hour")
             .addOptions(hourOptions(settings.digestHour)),
         ),
         new LabelBuilder()
-          .setLabel("妖怪が出現する回数")
-          .setDescription("同じ場所×やり残されていたことが、この回数記録されると妖怪が生まれます")
+          .setLabel("何度目に妖怪が出現するか")
+          .setDescription("同じ場所×やり残されていたことが、この回数目に記録されたときに妖怪が生まれます")
           .setStringSelectMenuComponent(
             new StringSelectMenuBuilder()
               .setCustomId("youkai-settei:threshold")
@@ -143,7 +142,7 @@ export const youkaiSettei: Command = {
           ),
         new LabelBuilder()
           .setLabel("場所の一覧（1行に1つ）")
-          .setDescription(`${MAX_ITEMS}個まで。消した場所は「使わない」状態になり、記録は残ります`)
+          .setDescription("消した場所は「使わない」状態になり、記録は残ります")
           .setTextInputComponent(
             listInput("youkai-settei:locations", locations.map((l) => l.name), "流し\n冷蔵庫\nコピー機"),
           ),
@@ -169,7 +168,7 @@ export const youkaiSettei: Command = {
       .addLabelComponents(
         new LabelBuilder()
           .setLabel("やり残されていたことの一覧（1行に1つ）")
-          .setDescription(`${MAX_ITEMS}個まで。それぞれに妖怪が1体ずつ対応します`)
+          .setDescription("それぞれに妖怪が1体ずつ対応します")
           .setTextInputComponent(
             listInput("youkai-settei:task-list", taskTypes.map((t) => t.name), "洗い物\nゴミ出し\n備品の補充"),
           ),
@@ -213,8 +212,8 @@ async function saveBasic(interaction: ModalSubmitInteraction) {
     content: [
       "**設定（1/2）**（※ まだ保存はされません）",
       `まとめ通知：<#${notifyChannel.id}> に毎日 ${digestHour}時`,
-      `ひとことの届け先：<#${adminChannel.id}>`,
-      `妖怪が出現する回数：${birthThreshold}回`,
+      `ひとことの届け先：<#${adminChannel.id}>（書かれたらすぐに届きます）`,
+      `何度目に妖怪が出現するか：${birthThreshold}度目`,
       "",
       `**場所**`,
       describeChanges(before, names),
