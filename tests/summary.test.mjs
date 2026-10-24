@@ -18,6 +18,7 @@ await test("/summaryの手動通知", async (t) => {
 
   const originalFetch = globalThis.fetch;
   let jobs = [];
+  let identities = [];
   let updates = [];
   let calls = [];
 
@@ -42,6 +43,11 @@ await test("/summaryの手動通知", async (t) => {
     if (table === "process_yokai_ascensions") {
       assert.equal(request.method, "POST");
       return respond(1);
+    }
+    if (table === "yokai_states") {
+      assert.equal(request.method, "GET");
+      assert.match(url.searchParams.get("id"), /^in\.\(/);
+      return respond(identities);
     }
     assert.equal(table, "notification_jobs");
     if (request.method === "GET") {
@@ -74,8 +80,13 @@ await test("/summaryの手動通知", async (t) => {
 
   await t.test("未報告データを公開応答し、送信後にsent_atを保存する", async () => {
     jobs = [
-      { id: "job-1", event_type: "presence" },
-      { id: "job-2", event_type: "shadow" },
+      { id: "job-1", event_type: "presence", yokai_id: null },
+      { id: "job-2", event_type: "birth", yokai_id: "yokai-1" },
+      { id: "job-3", event_type: "ascend", yokai_id: "yokai-2" },
+    ];
+    identities = [
+      { id: "yokai-1", yokai_name: "洗い物の妖怪", image_key: "yokai_Y01_lv1.png" },
+      { id: "yokai-2", yokai_name: "ゴミ出しの妖怪", image_key: "yokai_Y02_lv5.png" },
     ];
     updates = [];
     calls = [];
@@ -83,7 +94,13 @@ await test("/summaryの手動通知", async (t) => {
     await summary.execute(target);
 
     assert.deepEqual(target.calls[0], { method: "deferReply", args: [] });
-    assert.match(target.calls[1].args[0].content, /未報告だった変化は \*\*2件\*\*/);
+    assert.match(target.calls[1].args[0].content, /未報告だった変化は \*\*3件\*\*/);
+    assert.deepEqual(
+      target.calls[1].args[0].embeds.map((embed) => embed.title),
+      ["妖怪誕生：洗い物の妖怪", "成仏：ゴミ出しの妖怪"],
+    );
+    assert.equal(target.calls[1].args[0].files.length, 2);
+    assert.match(target.calls[1].args[0].files[0].attachment, /yokai_Y01_lv1\.png$/);
     assert.equal(updates.length, 1);
     assert.match(updates[0].sent_at, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(calls[0].table, "process_yokai_ascensions");
@@ -93,6 +110,7 @@ await test("/summaryの手動通知", async (t) => {
 
   await t.test("未報告データがない場合も公開で結果を知らせる", async () => {
     jobs = [];
+    identities = [];
     updates = [];
     calls = [];
     const target = interaction();

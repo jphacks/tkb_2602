@@ -21,6 +21,8 @@ declare
   v_event_type text;
   v_duplicate boolean;
   v_level integer;
+  v_task_name text;
+  v_yokai_key text;
   v_now timestamptz := now();
 begin
   -- 必須項目の確認
@@ -56,7 +58,8 @@ begin
   end if;
 
   -- 雑務がこのサーバーの有効な選択肢か確認
-  perform 1
+  select name, yokai_key
+    into v_task_name, v_yokai_key
   from public.task_types
   where id = p_task_type_id
     and guild_id = p_guild_id
@@ -158,6 +161,9 @@ begin
       else 'level_up'
     end;
 
+    -- 誕生をレベル1として計算し、表示する画像の段階を決める。
+    v_level := greatest(0, v_state.report_count - v_threshold + 1);
+
     update public.yokai_states
     set
       stage = v_stage,
@@ -166,7 +172,23 @@ begin
           then coalesce(born_at, v_now)
         else born_at
       end,
-      ascended_at = null
+      ascended_at = null,
+      yokai_name = case
+        when v_stage = 'active'
+          then coalesce(yokai_name, v_task_name || 'の妖怪')
+        else yokai_name
+      end,
+      image_key = case
+        when v_stage = 'active' and v_yokai_key ~ '^Y(0[1-9]|10)$' then
+          'yokai_' || v_yokai_key || '_lv' ||
+          case
+            when v_level >= 25 then '25'
+            when v_level >= 10 then '10'
+            when v_level >= 5 then '5'
+            else '1'
+          end || '.png'
+        else image_key
+      end
     where id = v_state.id
     returning * into v_state;
 
@@ -206,11 +228,10 @@ begin
     end if;
   end if;
 
-  -- 誕生時をレベル1として計算する
-  v_level := greatest(
-    0,
-    v_state.report_count - v_threshold + 1
-  );
+  -- 再送時はまだ計算していないため、現在の状態から求める。
+  if v_duplicate then
+    v_level := greatest(0, v_state.report_count - v_threshold + 1);
+  end if;
 
   return jsonb_build_object(
     'duplicate', v_duplicate,

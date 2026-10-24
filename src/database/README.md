@@ -63,6 +63,8 @@ await saveTaskSettings(guildId, 3, ["洗い物", "ごみ出し"]);
 最初に`sql/migrations/20261024_notification_delivery.sql`をSupabaseのSQL Editorで実行し、
 `notification_jobs.sent_at`と未送信検索用インデックスを追加します。
 続けて`sql/functions/process_yokai_ascensions.sql`を実行し、成仏判定用のDB関数を追加します。
+`sql/migrations/20261024_yokai_identity.sql`は`yokai_states`へ`yokai_name`と`image_key`を追加し、
+既存の誕生済み妖怪を雑務名・現在レベルから補完します。その後、最新の`sql/functions/submit_report.sql`を適用してください。
 
 Bot起動中は1分ごとに各Guildの設定を確認し、`notification_time`がそのGuildの`timezone`で
 現在時刻と一致したとき、`notification_jobs.sent_at is null`の行をまとめて通知します。
@@ -70,13 +72,16 @@ Bot起動中は1分ごとに各Guildの設定を確認し、`notification_time`�
 定時通知・`/summary`とも、通知ジョブを読む前に、`stage = active`かつ
 `last_reported_at + guild_settings.jobutsu_days <= 現在時刻`の妖怪を成仏させます。
 成仏への状態更新と`ascend`通知ジョブの登録はDB内の同じトランザクションで行います。
+誕生・成仏の通知には、`yokai_states`に固定した名前と`src/assets`の画像をEmbedで表示します。
+現時点の名前は初回誕生時に「雑務名＋の妖怪」で作り、画像は`task_types.yokai_key`と現在レベルから選びます。
+正式名を別処理で決める場合は、同じ`yokai_name`・`image_key`を更新すれば通知側はその値を使います。
 定時通知・手動通知とも、Discordへの送信成功後にだけ`sent_at`を更新します。送信失敗時は未送信のまま残り、定時通知は同じ時刻枠で再試行します。
 
 - `presence`・`shadow`はプライバシー保護のため場所を表示せず、件数だけ通知する。
 - `birth`・`level_up`・`weaken`・`ascend`も現在は件数で通知する。
 - 未送信行が0件ならDiscordへ投稿しない。
 - Botが通知時刻の1分間を通して停止していた場合、その日の通知は翌日の指定時刻まで待つ。
-- 実DBへは、設定保存SQL、通知配信migration、PR #5のevent type migration、成仏判定SQL、最新の報告関数の順で適用する。
+- 実DBへは、設定保存SQL、通知配信migration、PR #5のevent type migration、妖怪名・画像migration、成仏判定SQL、最新の報告関数の順で適用する。
 
 ## 定期報告用のデータ取得
 

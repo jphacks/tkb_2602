@@ -34,11 +34,11 @@ await test("notification_jobsの定時通知", async (t) => {
       timezone: "Asia/Tokyo",
     }];
     jobs = [
-      { id: "job-1", event_type: "presence" },
-      { id: "job-2", event_type: "presence" },
-      { id: "job-3", event_type: "shadow" },
-      { id: "job-4", event_type: "birth" },
-      { id: "job-5", event_type: "level_up" },
+      { id: "job-1", event_type: "presence", yokai_id: null },
+      { id: "job-2", event_type: "presence", yokai_id: null },
+      { id: "job-3", event_type: "shadow", yokai_id: null },
+      { id: "job-4", event_type: "birth", yokai_id: "yokai-1" },
+      { id: "job-5", event_type: "level_up", yokai_id: "yokai-1" },
     ];
     reads = [];
     updates = [];
@@ -85,6 +85,14 @@ await test("notification_jobsの定時通知", async (t) => {
       const offset = Number(url.searchParams.get("offset") ?? 0);
       return respond(offset === 0 ? jobs : []);
     }
+    if (table === "yokai_states" && request.method === "GET") {
+      assert.match(url.searchParams.get("id"), /^in\.\(/);
+      return respond([{
+        id: "yokai-1",
+        yokai_name: "洗い物の妖怪",
+        image_key: "yokai_Y01_lv1.png",
+      }]);
+    }
     if (table === "notification_jobs" && request.method === "PATCH") {
       assert.equal(url.searchParams.get("sent_at"), "is.null");
       assert.match(url.searchParams.get("id"), /^in\.\(/);
@@ -100,9 +108,9 @@ await test("notification_jobsの定時通知", async (t) => {
         assert.equal(channelId, notifyId);
         return {
           isSendable: () => true,
-          send: async ({ content }) => {
+          send: async (message) => {
             if (sendFailure) throw new Error("Discord test error");
-            messages.push(content);
+            messages.push(message);
           },
         };
       },
@@ -120,11 +128,13 @@ await test("notification_jobsの定時通知", async (t) => {
     await runScheduledNotifications(client, async () => now);
 
     assert.equal(messages.length, 1);
-    assert.match(messages[0], /未報告だった変化は \*\*5件\*\*/);
-    assert.match(messages[0], /気配：2件/);
-    assert.match(messages[0], /影：1件/);
-    assert.match(messages[0], /妖怪誕生：1件/);
-    assert.match(messages[0], /レベルアップ：1件/);
+    assert.match(messages[0].content, /未報告だった変化は \*\*5件\*\*/);
+    assert.match(messages[0].content, /気配：2件/);
+    assert.match(messages[0].content, /影：1件/);
+    assert.match(messages[0].content, /妖怪誕生：1件/);
+    assert.match(messages[0].content, /レベルアップ：1件/);
+    assert.equal(messages[0].embeds[0].title, "妖怪誕生：洗い物の妖怪");
+    assert.match(messages[0].files[0].attachment, /yokai_Y01_lv1\.png$/);
     assert.deepEqual(updates, [{ sent_at: now.toISOString() }]);
     const ascensionIndex = reads.findIndex((call) => call.table === "process_yokai_ascensions");
     const jobsIndex = reads.findIndex((call) => call.table === "notification_jobs");
