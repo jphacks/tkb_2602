@@ -66,7 +66,26 @@ export async function getCurrentActiveYokai(
     rows.push(...data);
   }
 
-  return rows.map((row) => {
+  // 誕生がまだ「妖怪だより」で知らされていない妖怪は、次の妖怪だよりまで出さない。
+  // すぐ出すと、/now を見た人に「さっき誰かが観測した」と分かってしまうため。
+  const unannounced = new Set<string>();
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("notification_jobs")
+      .select("id, yokai_id")
+      .eq("guild_id", guildId)
+      .eq("event_type", "birth")
+      .is("sent_at", null)
+      .order("id")
+      .range(offset, offset + pageSize - 1)
+      .returns<Array<{ id: string; yokai_id: string | null }>>();
+    if (error) throw new Error(`未送信の誕生通知の取得に失敗しました: ${error.message}`);
+    if (!data) throw new Error("未送信の誕生通知の取得結果がありません");
+    if (data.length === 0) break;
+    for (const job of data) if (job.yokai_id) unannounced.add(job.yokai_id);
+  }
+
+  return rows.filter((row) => !unannounced.has(row.id)).map((row) => {
     if (!row.location || !row.taskType) {
       throw new Error("妖怪に対応する場所・やり残しの種類を取得できませんでした");
     }

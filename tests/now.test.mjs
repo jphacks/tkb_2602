@@ -18,6 +18,7 @@ await test("/nowの現在妖怪一覧", async (t) => {
 
   const originalFetch = globalThis.fetch;
   let states = [];
+  let pendingBirths = [];
   const requests = [];
 
   t.after(() => {
@@ -40,6 +41,12 @@ await test("/nowの現在妖怪一覧", async (t) => {
 
     assert.equal(request.method, "GET");
     if (table === "guild_settings") return respond({ birth_threshold: 3 });
+    if (table === "notification_jobs") {
+      assert.equal(url.searchParams.get("event_type"), "eq.birth");
+      assert.equal(url.searchParams.get("sent_at"), "is.null");
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      return respond(offset === 0 ? pendingBirths : []);
+    }
     assert.equal(table, "yokai_states");
     assert.equal(url.searchParams.get("stage"), "eq.active");
     assert.equal(url.searchParams.get("guild_id"), `eq.${testEnv.DISCORD_GUILD_ID}`);
@@ -88,6 +95,34 @@ await test("/nowの現在妖怪一覧", async (t) => {
     assert.match(content, /\*\*あらいわすれ坊\*\*（洗い物）— レベル 1/);
     assert.doesNotMatch(content, /attachment:\/\//);
     assert.equal(requests.filter((item) => item.table === "yokai_states").length, 2);
+  });
+
+  await t.test("誕生がまだ妖怪だよりで知らされていない妖怪は、次の妖怪だよりまで出さない", async () => {
+    states = [
+      {
+        id: "yokai-1", location_id: "location-1", report_count: 3,
+        yokai_name: "洗い物の妖怪", image_key: "yokai_Y01_lv1.png",
+        location: { name: "流し" }, taskType: { name: "洗い物" },
+      },
+      {
+        id: "yokai-2", location_id: "location-2", report_count: 7,
+        yokai_name: "ゴミ出しの妖怪", image_key: "yokai_Y02_lv5.png",
+        location: { name: "部室" }, taskType: { name: "ごみ出し" },
+      },
+    ];
+    pendingBirths = [{ id: "job-1", yokai_id: "yokai-1" }];
+    const target = interaction();
+    await now.execute(target);
+    const content = target.calls[1].args[0];
+    assert.doesNotMatch(content, /あらいわすれ坊/);
+    assert.match(content, /ゴミため坊/);
+
+    // まだ知らされていない妖怪しかいなければ「いません」と出す
+    states = states.slice(0, 1);
+    const onlyNew = interaction();
+    await now.execute(onlyNew);
+    assert.equal(onlyNew.calls[1].args[0], "現在活動中の妖怪はいません。");
+    pendingBirths = [];
   });
 
   await t.test("activeの妖怪がいない場合も公開で案内する", async () => {
