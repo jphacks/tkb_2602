@@ -132,8 +132,9 @@ await test("notification_jobsの定時通知", async (t) => {
     assert.match(messages[0].content, /気配：2件/);
     assert.match(messages[0].content, /影：1件/);
     assert.match(messages[0].content, /妖怪誕生：1件/);
+    assert.match(messages[0].content, /\*\*あらいわすれ坊\*\*/);
     assert.match(messages[0].content, /レベルアップ：1件/);
-    assert.equal(messages[0].embeds[0].title, "妖怪誕生：洗い物の妖怪");
+    assert.equal(messages[0].embeds[0].title, "妖怪誕生：あらいわすれ坊");
     assert.match(messages[0].files[0].attachment, /yokai_Y01_lv1\.png$/);
     assert.deepEqual(updates, [{ sent_at: now.toISOString() }]);
     const ascensionIndex = reads.findIndex((call) => call.table === "process_yokai_ascensions");

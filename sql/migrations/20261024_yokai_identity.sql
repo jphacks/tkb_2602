@@ -5,10 +5,27 @@ alter table public.yokai_states
   add column if not exists yokai_name text,
   add column if not exists image_key text;
 
--- すでに誕生・成仏している妖怪にも、現在の雑務名・レベルから初期値を入れる。
+-- すでに誕生・成仏している妖怪にも、正式名と現在レベルの画像を入れる。
+-- 旧版で入れた「雑務名の妖怪」は正式名へ置換するが、個別に付けた名前は維持する。
 update public.yokai_states as ys
 set
-  yokai_name = coalesce(ys.yokai_name, tt.name || 'の妖怪'),
+  yokai_name = case
+    when ys.yokai_name is null or ys.yokai_name = tt.name || 'の妖怪' then
+      case tt.yokai_key
+        when 'Y01' then 'あらいわすれ坊'
+        when 'Y02' then 'ゴミため坊'
+        when 'Y03' then 'おきっぱ小僧'
+        when 'Y04' then 'つくえふさぎ'
+        when 'Y05' then 'もどらずピペット'
+        when 'Y06' then 'あかり喰い'
+        when 'Y07' then 'ふきっぱ風神'
+        when 'Y08' then 'ひえひえ忘れん坊'
+        when 'Y09' then 'ほこりもくもく'
+        when 'Y10' then 'からっぽ狸'
+        else tt.name || 'の妖怪'
+      end
+    else ys.yokai_name
+  end,
   image_key = coalesce(
     ys.image_key,
     case when tt.yokai_key ~ '^Y(0[1-9]|10)$' then
