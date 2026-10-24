@@ -27,8 +27,8 @@ import {
 import type { Command } from "./types.js";
 
 // /youkai-settei：管理者用の設定（1番）
-//   1枚目のモーダル：まとめ通知のチャンネル・管理者のチャンネル・まとめ通知の時刻・何度目に妖怪が出現するか・場所の一覧
-//   2枚目のモーダル：やり残されていたことの一覧（モーダルは1枚に5項目までなので分ける）
+//   1枚目のモーダル：まとめ通知のチャンネル・管理者のチャンネル・まとめ通知の時刻（時・分）・場所の一覧
+//   2枚目のモーダル：何度目に妖怪が出現するか・やり残されていたことの一覧（モーダルは1枚に5項目までなので分ける）
 // 開くたびに今の設定が入った状態で開くので、直したいところだけ書き換えればよい
 
 const MAX_NAME_LENGTH = 50;
@@ -63,12 +63,25 @@ async function rejectIfNotAdmin(interaction: ChatInputCommandInteraction | Messa
   return true;
 }
 
+// 時刻は「時」と「分」に分ける（0:00〜23:30を30分刻みで並べると48個になり、選択メニューの上限25個を超えるため）
 function hourOptions(current: number) {
   return Array.from({ length: 24 }, (_, hour) => ({
     label: `${hour}時`,
     value: String(hour),
     default: hour === current,
   }));
+}
+
+function minuteOptions(current: number) {
+  return [0, 30].map((minute) => ({
+    label: `${String(minute).padStart(2, "0")}分`,
+    value: String(minute),
+    default: minute === current,
+  }));
+}
+
+function formatTime(hour: number, minute: number) {
+  return `${hour}:${String(minute).padStart(2, "0")}`;
 }
 
 function thresholdOptions(current: number) {
@@ -127,19 +140,16 @@ export const youkaiSettei: Command = {
           .setChannelSelectMenuComponent(
             channelMenu("youkai-settei:admin", "例：#管理者", settings.adminChannelId),
           ),
-        new LabelBuilder().setLabel("まとめ通知を送る時刻").setStringSelectMenuComponent(
+        new LabelBuilder().setLabel("まとめ通知を送る時刻（時）").setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId("youkai-settei:hour")
             .addOptions(hourOptions(settings.digestHour)),
         ),
-        new LabelBuilder()
-          .setLabel("何度目に妖怪が出現するか")
-          .setDescription("同じ場所×やり残されていたことが、この回数目に記録されたときに妖怪が生まれます")
-          .setStringSelectMenuComponent(
-            new StringSelectMenuBuilder()
-              .setCustomId("youkai-settei:threshold")
-              .addOptions(thresholdOptions(settings.birthThreshold)),
-          ),
+        new LabelBuilder().setLabel("まとめ通知を送る時刻（分）").setStringSelectMenuComponent(
+          new StringSelectMenuBuilder()
+            .setCustomId("youkai-settei:minute")
+            .addOptions(minuteOptions(settings.digestMinute)),
+        ),
         new LabelBuilder()
           .setLabel("場所の一覧（1行に1つ）")
           .setDescription("消した場所は「使わない」状態になり、記録は残ります")
@@ -160,12 +170,21 @@ export const youkaiSettei: Command = {
   async handleComponent(interaction) {
     if (interaction.customId !== "youkai-settei:open-tasks") return;
     if (await rejectIfNotAdmin(interaction)) return;
-    const taskTypes = await getTaskTypes(interaction.guildId!);
+    const guildId = interaction.guildId!;
+    const [settings, taskTypes] = await Promise.all([getGuildSettings(guildId), getTaskTypes(guildId)]);
 
     const modal = new ModalBuilder()
       .setCustomId("youkai-settei:tasks")
       .setTitle("妖怪ボットの設定（2/2）")
       .addLabelComponents(
+        new LabelBuilder()
+          .setLabel("何度目に妖怪が出現するか")
+          .setDescription("同じ場所×やり残されていたことが、この回数目に記録されたときに妖怪が生まれます")
+          .setStringSelectMenuComponent(
+            new StringSelectMenuBuilder()
+              .setCustomId("youkai-settei:threshold")
+              .addOptions(thresholdOptions(settings.birthThreshold)),
+          ),
         new LabelBuilder()
           .setLabel("やり残されていたことの一覧（1行に1つ）")
           .setDescription("それぞれに妖怪が1体ずつ対応します")
@@ -186,7 +205,7 @@ async function saveBasic(interaction: ModalSubmitInteraction) {
   const notifyChannel = interaction.fields.getSelectedChannels("youkai-settei:notify", true).first()!;
   const adminChannel = interaction.fields.getSelectedChannels("youkai-settei:admin", true).first()!;
   const digestHour = Number(interaction.fields.getStringSelectValues("youkai-settei:hour")[0]);
-  const birthThreshold = Number(interaction.fields.getStringSelectValues("youkai-settei:threshold")[0]);
+  const digestMinute = Number(interaction.fields.getStringSelectValues("youkai-settei:minute")[0]);
   const { names, errors } = parseList(interaction.fields.getTextInputValue("youkai-settei:locations"));
 
   if (errors.length > 0) {
@@ -199,7 +218,7 @@ async function saveBasic(interaction: ModalSubmitInteraction) {
     notificationChannelId: notifyChannel.id,
     adminChannelId: adminChannel.id,
     digestHour,
-    birthThreshold,
+    digestMinute,
   });
   await saveLocationNames(guildId, names);
 
@@ -211,9 +230,8 @@ async function saveBasic(interaction: ModalSubmitInteraction) {
   await interaction.editReply({
     content: [
       "**設定（1/2）**（※ まだ保存はされません）",
-      `まとめ通知：<#${notifyChannel.id}> に毎日 ${digestHour}時`,
+      `まとめ通知：<#${notifyChannel.id}> に毎日 ${formatTime(digestHour, digestMinute)}`,
       `ひとことの届け先：<#${adminChannel.id}>（書かれたらすぐに届きます）`,
-      `何度目に妖怪が出現するか：${birthThreshold}度目`,
       "",
       `**場所**`,
       describeChanges(before, names),
@@ -229,6 +247,7 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
   await interaction.deferUpdate();
   const guildId = interaction.guildId!;
 
+  const birthThreshold = Number(interaction.fields.getStringSelectValues("youkai-settei:threshold")[0]);
   const { names, errors } = parseList(interaction.fields.getTextInputValue("youkai-settei:task-list"));
   if (errors.length > 0) {
     await interaction.followUp({
@@ -239,11 +258,14 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
   }
 
   const before = (await getTaskTypes(guildId)).map((t) => t.name);
+  await saveGuildSettings(guildId, { birthThreshold });
   await saveTaskTypeNames(guildId, names);
 
   await interaction.editReply({
     content: [
       interaction.message.content,
+      "",
+      `**妖怪の出現**：${birthThreshold}度目の記録で出現`,
       "",
       "**やり残されていたこと**",
       describeChanges(before, names),

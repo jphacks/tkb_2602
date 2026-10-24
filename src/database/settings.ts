@@ -7,11 +7,13 @@ import { supabase } from "./client.js";
 export type GuildSettings = {
   notificationChannelId: string | null; // まとめ通知を送るチャンネル（#妖怪だより）
   adminChannelId: string | null; // 管理者に「ひとこと」を届けるチャンネル
-  digestHour: number; // まとめ通知を送る時刻（0〜23時）
-  birthThreshold: number; // 妖怪が出現する回数
+  digestHour: number; // まとめ通知を送る時刻の「時」（0〜23）
+  digestMinute: number; // まとめ通知を送る時刻の「分」（0 または 30）
+  birthThreshold: number; // 何度目の記録で妖怪が出現するか
 };
 
 const DEFAULT_DIGEST_HOUR = 18;
+const DEFAULT_DIGEST_MINUTE = 0;
 
 export async function getGuildSettings(guildId: string): Promise<GuildSettings> {
   const { data, error } = await supabase
@@ -24,14 +26,16 @@ export async function getGuildSettings(guildId: string): Promise<GuildSettings> 
   return {
     notificationChannelId: data?.notification_channel_id ?? null,
     adminChannelId: data?.admin_channel_id ?? null,
-    // TODO（2番）：guild_settings に「まとめ通知の時刻」の列（例：digest_hour）を足して、ここで読む
+    // TODO（2番）：guild_settings に「まとめ通知の時刻」の列（例：digest_time time default '18:00'）を足して、ここで読む
     digestHour: DEFAULT_DIGEST_HOUR,
+    digestMinute: DEFAULT_DIGEST_MINUTE,
     birthThreshold: data?.birth_threshold ?? 3,
   };
 }
 
 // TODO（2番）：設定を guild_settings に保存する（なければ行を作る）
-export async function saveGuildSettings(guildId: string, settings: GuildSettings): Promise<void> {
+// モーダルが2枚に分かれているので、渡された項目だけを書き換える（渡されなかった項目はそのまま）
+export async function saveGuildSettings(guildId: string, settings: Partial<GuildSettings>): Promise<void> {
   console.log(`[未保存] 設定 ${guildId}`, settings);
 }
 
