@@ -7,7 +7,7 @@ export type MasterItem = {
   name: string;
 };
 
-// /youkai で1回報告されたときの中身（1番 → 2番・3番 に渡す）
+// /taiji で1回記録されたときの中身（1番 → 2番・3番 に渡す）
 // 報告者IDは守り神のポイントのためだけに使い、表示や通知には絶対に出さない
 export type ReportInput = {
   requestId: string; // Discordのインタラクションのid（二重登録を防ぐ）

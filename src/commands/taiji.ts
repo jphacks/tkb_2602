@@ -11,8 +11,8 @@ import { getLocations, getTaskTypes } from "../database/masters.js";
 import type { MasterItem } from "../types.js";
 import type { Command } from "./types.js";
 
-// /youkai：雑務の報告（1番）
-// A案：モーダルの中に「場所」「雑務」の選択メニューと「ひとこと」を置く
+// /taiji：退治の記録（1番）。妖怪を退治するために片づけたことを記録する
+// A案：モーダルの中に「場所」「片づけたこと」の選択メニューと「ひとこと」を置く
 // ※ モーダルは最初の返事なので deferReply できない。一覧の取得を含めて3秒以内に開く必要がある
 
 const OTHER = "other"; // 「一覧にない場所」「その他」を選んだときの値
@@ -25,8 +25,8 @@ function toOptions(items: MasterItem[], otherLabel: string) {
   ];
 }
 
-export const youkai: Command = {
-  data: new SlashCommandBuilder().setName("youkai").setDescription("雑務を報告します"),
+export const taiji: Command = {
+  data: new SlashCommandBuilder().setName("taiji").setDescription("妖怪を退治するために片づけたことを記録します"),
 
   async execute(interaction) {
     const received = Date.now() - interaction.createdTimestamp;
@@ -38,19 +38,19 @@ export const youkai: Command = {
     const fetchMs = Date.now() - fetchStart;
 
     const modal = new ModalBuilder()
-      .setCustomId("youkai:modal")
-      .setTitle("雑務を報告する")
+      .setCustomId("taiji:modal")
+      .setTitle("退治の記録")
       .addLabelComponents(
         new LabelBuilder().setLabel("場所").setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
-            .setCustomId("youkai:location")
+            .setCustomId("taiji:location")
             .setPlaceholder("場所を選んでください")
             .addOptions(toOptions(locations, "一覧にない場所")),
         ),
-        new LabelBuilder().setLabel("雑務").setStringSelectMenuComponent(
+        new LabelBuilder().setLabel("片づけたこと").setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
-            .setCustomId("youkai:task")
-            .setPlaceholder("雑務を選んでください")
+            .setCustomId("taiji:task")
+            .setPlaceholder("片づけたことを選んでください")
             .addOptions(toOptions(taskTypes, "その他")),
         ),
         new LabelBuilder()
@@ -58,7 +58,7 @@ export const youkai: Command = {
           .setDescription("一覧にないときだけ。管理者だけに届き、公開されません")
           .setTextInputComponent(
             new TextInputBuilder()
-              .setCustomId("youkai:note")
+              .setCustomId("taiji:note")
               .setStyle(TextInputStyle.Short)
               .setMaxLength(50)
               .setRequired(false),
@@ -70,7 +70,7 @@ export const youkai: Command = {
     // 計測：3秒に間に合っているかを確かめる（A案で大丈夫か判断するため）
     const total = Date.now() - interaction.createdTimestamp;
     console.log(
-      `[計測] /youkai 受信まで ${received}ms ＋ Supabase ${fetchMs}ms → モーダルまで合計 ${total}ms` +
+      `[計測] /taiji 受信まで ${received}ms ＋ Supabase ${fetchMs}ms → モーダルまで合計 ${total}ms` +
         (total > 2500 ? " ⚠️ 3秒に近い" : ""),
     );
   },
@@ -79,9 +79,9 @@ export const youkai: Command = {
     // ここから先はデータベースを使うので、先に「考え中…」を出す（本人にだけ見える）
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const locationId = interaction.fields.getStringSelectValues("youkai:location")[0];
-    const taskTypeId = interaction.fields.getStringSelectValues("youkai:task")[0];
-    const note = interaction.fields.getTextInputValue("youkai:note");
+    const locationId = interaction.fields.getStringSelectValues("taiji:location")[0];
+    const taskTypeId = interaction.fields.getStringSelectValues("taiji:task")[0];
+    const note = interaction.fields.getTextInputValue("taiji:note");
 
     if (note) {
       // TODO（1番）：管理者だけが見られる場所に送る。誰が書いたかは出さない。保存もしない
