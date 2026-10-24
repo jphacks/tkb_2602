@@ -11,9 +11,10 @@ import {
 import { getLocations, getTaskTypes } from "../database/masters.js";
 import { createReportSession } from "../database/report-session.js";
 import { submitReport } from "../database/reports.js";
+import { getYokaiIdentity } from "../database/yokai.js";
 import { getGuildSettings } from "../database/settings.js";
 import { type AdminNoteContext, adminNoteMessage } from "../notifications/admin-note.js";
-import { birthFrames, isBirth, reportReply } from "../notifications/report-reply.js";
+import { birthFrames, evolutionReply, isBirth, isEvolution, reportReply } from "../notifications/report-reply.js";
 import { getTimeOffsetMs } from "../time.js";
 import type { MasterItem } from "../types.js";
 import type { Command } from "./types.js";
@@ -168,12 +169,22 @@ export const youkai: Command = {
       });
       console.log(`[記録] 回数 ${result.reportCount} / 状態 ${result.stage} / Lv.${result.yokaiLevel}`);
 
-      if (isBirth(result)) {
-        // 誕生の演出：気配 → 影 → 姿 と、本人にだけ見える返事を書き換える
-        const frames = birthFrames(result, context);
-        for (const [i, frame] of frames.entries()) {
-          if (i > 0) await sleep(BIRTH_FRAME_MS);
-          await interaction.editReply(i === frames.length - 1 ? frame + noteLine : frame);
+      if (isBirth(result) || isEvolution(result)) {
+        // 妖怪の名前と画像（submit_report が保存したもの）。取れなくても、文字だけで返事は出す
+        const identity = await getYokaiIdentity(guildId, result.yokaiId).catch((error) => {
+          console.error("妖怪の名前と画像を取得できませんでした:", error);
+          return { yokaiName: null, imageKey: null };
+        });
+        if (isBirth(result)) {
+          // 誕生の演出：気配 → 影 → 姿 と、本人にだけ見える返事を書き換える（最後に名前と画像）
+          const frames = birthFrames(result, context, identity);
+          for (const [i, frame] of frames.entries()) {
+            if (i > 0) await sleep(BIRTH_FRAME_MS);
+            await interaction.editReply(i === frames.length - 1 ? { ...frame, content: frame.content + noteLine } : frame);
+          }
+        } else {
+          const reply = evolutionReply(result, context, identity);
+          await interaction.editReply({ ...reply, content: reply.content + noteLine });
         }
       } else {
         await interaction.editReply(reportReply(result, context) + noteLine);
