@@ -28,7 +28,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
       await byName.get(interaction.commandName)?.execute(interaction);
     } else if (interaction.isModalSubmit()) {
-      // customId の先頭（「taiji:modal」なら taiji）で、どのコマンドの部品かを見分ける
+      // customId の先頭（「kansoku:modal」なら kansoku）で、どのコマンドの部品かを見分ける
       await byName.get(interaction.customId.split(":")[0])?.handleModal?.(interaction);
     } else if (interaction.isMessageComponent()) {
       await byName.get(interaction.customId.split(":")[0])?.handleComponent?.(interaction);
