@@ -37,7 +37,7 @@ await test("設定保存と設定画面", async (t) => {
     rpcCheck = () => {};
     storedSettings = {
       notification_channel_id: notifyId, admin_channel_id: adminId,
-      digest_time: "19:30:00", birth_threshold: 5,
+      notification_time: "19:30:00", birth_threshold: 5,
     };
   }
   reset();
@@ -59,7 +59,7 @@ await test("設定保存と設定画面", async (t) => {
     assert.equal(url.searchParams.get("guild_id"), `eq.${guildId}`);
     getCalls.push(url);
     if (url.pathname.endsWith("/guild_settings")) {
-      assert.match(url.searchParams.get("select"), /digest_time/);
+      assert.match(url.searchParams.get("select"), /notification_time/);
       return respond(storedSettings ? [storedSettings] : []);
     }
     assert.ok(["/rest/v1/locations", "/rest/v1/task_types"].includes(url.pathname));
@@ -114,7 +114,7 @@ await test("設定保存と設定画面", async (t) => {
     assert.deepEqual(await settings.getGuildSettings(guildId), {
       notificationChannelId: null, adminChannelId: null, digestHour: 18, digestMinute: 0, birthThreshold: 3,
     });
-    storedSettings = { digest_time: "24:00:00" };
+    storedSettings = { notification_time: "24:00:00" };
     await assert.rejects(settings.getGuildSettings(guildId), /通知時刻が不正/);
   });
 

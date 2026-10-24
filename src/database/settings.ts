@@ -11,7 +11,7 @@ export type GuildSettings = {
 type SettingsRow = {
   notification_channel_id: string | null;
   admin_channel_id: string | null;
-  digest_time: string;
+  notification_time: string;
   birth_threshold: number;
 };
 
@@ -28,12 +28,12 @@ export async function getGuildSettings(guildId: string): Promise<GuildSettings> 
   validateGuildId(guildId);
   const { data, error } = await supabase
     .from("guild_settings")
-    .select("notification_channel_id, admin_channel_id, digest_time, birth_threshold")
+    .select("notification_channel_id, admin_channel_id, notification_time, birth_threshold")
     .eq("guild_id", guildId)
     .maybeSingle<SettingsRow>();
   if (error) throw error;
 
-  const time = data?.digest_time ?? "18:00:00";
+  const time = data?.notification_time ?? "18:00:00";
   const match = /^(\d{2}):(00|30):00(?:\.0+)?$/.exec(time);
   if (!match || Number(match[1]) > 23) {
     throw new Error("保存されている通知時刻が不正です。");

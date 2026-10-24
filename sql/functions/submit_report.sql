@@ -1,11 +1,16 @@
 begin;
 
+-- 引数を足したので、古い形（5つの引数）の関数を消してから作り直す（両方あると呼び分けられなくなるため）
+drop function if exists public.submit_report(uuid, text, uuid, uuid, text);
+
 create or replace function public.submit_report(
   p_request_id uuid,
   p_guild_id text,
   p_location_id uuid,
   p_task_type_id uuid,
-  p_member_key text
+  p_member_key text,
+  -- アプリの中の「今」（getNow()）。デモで時間を進めたときのため。省略したら本当の今
+  p_now timestamptz default null
 )
 returns jsonb
 language plpgsql
@@ -21,7 +26,9 @@ declare
   v_event_type text;
   v_duplicate boolean;
   v_level integer;
-  v_now timestamptz := now();
+  v_task_name text;
+  v_yokai_key text;
+  v_now timestamptz := coalesce(p_now, now());
 begin
   -- 必須項目の確認
   if p_request_id is null
@@ -56,7 +63,8 @@ begin
   end if;
 
   -- 雑務がこのサーバーの有効な選択肢か確認
-  perform 1
+  select name, yokai_key
+    into v_task_name, v_yokai_key
   from public.task_types
   where id = p_task_type_id
     and guild_id = p_guild_id
@@ -71,13 +79,15 @@ begin
     request_id,
     guild_id,
     location_id,
-    task_type_id
+    task_type_id,
+    created_at
   )
   values (
     p_request_id,
     p_guild_id,
     p_location_id,
-    p_task_type_id
+    p_task_type_id,
+    v_now
   )
   on conflict (request_id) do nothing
   returning id into v_report_id;
@@ -158,6 +168,9 @@ begin
       else 'level_up'
     end;
 
+    -- 誕生をレベル1として計算し、表示する画像の段階を決める。
+    v_level := greatest(0, v_state.report_count - v_threshold + 1);
+
     update public.yokai_states
     set
       stage = v_stage,
@@ -166,7 +179,36 @@ begin
           then coalesce(born_at, v_now)
         else born_at
       end,
-      ascended_at = null
+      ascended_at = null,
+      yokai_name = case
+        when v_stage = 'active'
+          and (yokai_name is null or yokai_name = v_task_name || 'の妖怪')
+          then case v_yokai_key
+            when 'Y01' then 'あらいわすれ坊'
+            when 'Y02' then 'ゴミため坊'
+            when 'Y03' then 'おきっぱ小僧'
+            when 'Y04' then 'つくえふさぎ'
+            when 'Y05' then 'もどらずピペット'
+            when 'Y06' then 'あかり喰い'
+            when 'Y07' then 'ふきっぱ風神'
+            when 'Y08' then 'ひえひえ忘れん坊'
+            when 'Y09' then 'ほこりもくもく'
+            when 'Y10' then 'からっぽ狸'
+            else v_task_name || 'の妖怪'
+          end
+        else yokai_name
+      end,
+      image_key = case
+        when v_stage = 'active' and v_yokai_key ~ '^Y(0[1-9]|10)$' then
+          'yokai_' || v_yokai_key || '_lv' ||
+          case
+            when v_level >= 25 then '25'
+            when v_level >= 10 then '10'
+            when v_level >= 5 then '5'
+            else '1'
+          end || '.png'
+        else image_key
+      end
     where id = v_state.id
     returning * into v_state;
 
@@ -206,11 +248,10 @@ begin
     end if;
   end if;
 
-  -- 誕生時をレベル1として計算する
-  v_level := greatest(
-    0,
-    v_state.report_count - v_threshold + 1
-  );
+  -- 再送時はまだ計算していないため、現在の状態から求める。
+  if v_duplicate then
+    v_level := greatest(0, v_state.report_count - v_threshold + 1);
+  end if;
 
   return jsonb_build_object(
     'duplicate', v_duplicate,
@@ -225,11 +266,11 @@ $$;
 
 -- この関数はBotのサーバー側からだけ実行する
 revoke all on function public.submit_report(
-  uuid, text, uuid, uuid, text
+  uuid, text, uuid, uuid, text, timestamptz
 ) from public, anon, authenticated;
 
 grant execute on function public.submit_report(
-  uuid, text, uuid, uuid, text
+  uuid, text, uuid, uuid, text, timestamptz
 ) to service_role;
 
 commit;
