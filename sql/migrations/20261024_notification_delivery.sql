@@ -3,6 +3,10 @@
 
 begin;
 
+-- 通知時刻を解釈するタイムゾーン。既存Guildは日本時間を引き継ぐ。
+alter table public.guild_settings
+  add column if not exists timezone text not null default 'Asia/Tokyo';
+
 alter table public.notification_jobs
   add column if not exists sent_at timestamptz;
 

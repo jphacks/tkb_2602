@@ -61,7 +61,7 @@ await saveTaskSettings(guildId, 3, ["洗い物", "ごみ出し"]);
 ## 未送信通知の定時配信
 
 最初に`sql/migrations/20261024_notification_delivery.sql`をSupabaseのSQL Editorで実行し、
-`notification_jobs.sent_at`と未送信検索用インデックスを追加します。
+`guild_settings.timezone`（既定値`Asia/Tokyo`）、`notification_jobs.sent_at`、未送信検索用インデックスを追加します。
 続けて`sql/functions/process_yokai_ascensions.sql`を実行し、成仏判定用のDB関数を追加します。
 `sql/migrations/20261024_yokai_identity.sql`は`yokai_states`へ`yokai_name`と`image_key`を追加し、
 既存の誕生済み妖怪を雑務名・現在レベルから補完します。その後、最新の`sql/functions/submit_report.sql`を適用してください。
