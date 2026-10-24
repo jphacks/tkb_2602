@@ -6,6 +6,8 @@ export type ReportInput = {
   locationId: string;
   taskTypeId: string;
   memberKey: string;
+  // アプリの中の「今」（getNow()）。デモで時間を進めているときだけ渡す。省略したらデータベースの本当の今
+  now?: Date;
 };
 
 export type ReportResult = {
@@ -26,6 +28,8 @@ export async function submitReport(
     p_location_id: input.locationId,
     p_task_type_id: input.taskTypeId,
     p_member_key: input.memberKey,
+    // 時間を進めていないときは送らない（p_now の追加前の関数でも動くように）
+    ...(input.now ? { p_now: input.now.toISOString() } : {}),
   });
 
   if (error) {
