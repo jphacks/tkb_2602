@@ -72,6 +72,13 @@ await test("notification_jobsの定時通知", async (t) => {
       const offset = Number(url.searchParams.get("offset") ?? 0);
       return respond(offset === 0 ? schedules : []);
     }
+    if (table === "process_yokai_ascensions") {
+      assert.equal(request.method, "POST");
+      const body = await request.json();
+      assert.equal(body.p_guild_id, schedules[0].guild_id);
+      assert.match(body.p_now, /^\d{4}-\d{2}-\d{2}T/);
+      return respond(1);
+    }
     if (table === "notification_jobs" && request.method === "GET") {
       assert.equal(url.searchParams.get("guild_id"), `eq.${schedules[0].guild_id}`);
       assert.equal(url.searchParams.get("sent_at"), "is.null");
@@ -119,6 +126,9 @@ await test("notification_jobsの定時通知", async (t) => {
     assert.match(messages[0], /妖怪誕生：1件/);
     assert.match(messages[0], /レベルアップ：1件/);
     assert.deepEqual(updates, [{ sent_at: now.toISOString() }]);
+    const ascensionIndex = reads.findIndex((call) => call.table === "process_yokai_ascensions");
+    const jobsIndex = reads.findIndex((call) => call.table === "notification_jobs");
+    assert.ok(ascensionIndex >= 0 && ascensionIndex < jobsIndex);
   });
 
   await t.test("同じGuild・同じ時刻枠は二重実行しない", async () => {

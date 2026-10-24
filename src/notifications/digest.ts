@@ -3,11 +3,12 @@ import {
   getNotificationSchedules,
   getPendingNotificationJobs,
   markNotificationJobsSent,
+  processYokaiAscensions,
   type PendingNotificationJob,
 } from "../database/notification-jobs.js";
 import { getNow } from "../time.js";
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 60_000;
 const handledSlots = new Map<string, string>();
 const deliveringGuilds = new Set<string>();
 
@@ -89,6 +90,8 @@ export async function deliverPendingNotifications(
 
   deliveringGuilds.add(guildId);
   try {
+    // 通知を読む直前に成仏を確定し、その通知ジョブも今回のまとめへ含める。
+    await processYokaiAscensions(guildId, sentAt);
     const jobs = await getPendingNotificationJobs(guildId);
     if (jobs.length === 0) return 0;
 

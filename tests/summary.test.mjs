@@ -19,6 +19,7 @@ await test("/summaryの手動通知", async (t) => {
   const originalFetch = globalThis.fetch;
   let jobs = [];
   let updates = [];
+  let calls = [];
 
   t.after(() => {
     globalThis.fetch = originalFetch;
@@ -37,6 +38,11 @@ await test("/summaryの手動通知", async (t) => {
       headers: { "Content-Type": "application/json" },
     });
 
+    calls.push({ table, method: request.method, body: request.method === "POST" ? await request.clone().json() : null });
+    if (table === "process_yokai_ascensions") {
+      assert.equal(request.method, "POST");
+      return respond(1);
+    }
     assert.equal(table, "notification_jobs");
     if (request.method === "GET") {
       assert.equal(url.searchParams.get("guild_id"), `eq.${testEnv.DISCORD_GUILD_ID}`);
@@ -72,6 +78,7 @@ await test("/summaryの手動通知", async (t) => {
       { id: "job-2", event_type: "shadow" },
     ];
     updates = [];
+    calls = [];
     const target = interaction();
     await summary.execute(target);
 
@@ -79,11 +86,15 @@ await test("/summaryの手動通知", async (t) => {
     assert.match(target.calls[1].args[0].content, /未報告だった変化は \*\*2件\*\*/);
     assert.equal(updates.length, 1);
     assert.match(updates[0].sent_at, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(calls[0].table, "process_yokai_ascensions");
+    assert.deepEqual(calls[0].body.p_guild_id, testEnv.DISCORD_GUILD_ID);
+    assert.equal(calls[1].table, "notification_jobs");
   });
 
   await t.test("未報告データがない場合も公開で結果を知らせる", async () => {
     jobs = [];
     updates = [];
+    calls = [];
     const target = interaction();
     await summary.execute(target);
 
@@ -93,6 +104,7 @@ await test("/summaryの手動通知", async (t) => {
       args: ["未報告の妖怪の変化はありません。"],
     });
     assert.equal(updates.length, 0);
+    assert.equal(calls[0].table, "process_yokai_ascensions");
   });
 
   await t.test("サーバー外では実行しない", async () => {

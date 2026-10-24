@@ -12,6 +12,19 @@ export type PendingNotificationJob = {
   eventType: string;
 };
 
+export async function processYokaiAscensions(
+  guildId: string,
+  now: Date,
+): Promise<number> {
+  const { data, error } = await supabase.rpc("process_yokai_ascensions", {
+    p_guild_id: guildId,
+    p_now: now.toISOString(),
+  });
+  if (error) throw new Error(`成仏判定に失敗しました: ${error.message}`);
+  if (typeof data !== "number") throw new Error("成仏判定の結果が不正です");
+  return data;
+}
+
 type ScheduleRow = {
   guild_id: string;
   notification_channel_id: string | null;
