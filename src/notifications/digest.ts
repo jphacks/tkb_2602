@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Client } from "discord.js";
 import {
   getNotificationSchedules,
@@ -20,6 +22,20 @@ const EVENT_LABELS: Record<string, string> = {
   weaken: "弱体化",
   ascend: "成仏",
 };
+
+export type NotificationMessage = {
+  content: string;
+  embeds?: Array<{ title: string; image?: { url: string } }>;
+  files?: Array<{ attachment: string; name: string }>;
+};
+
+const IMAGE_KEY_PATTERN = /^yokai_Y(?:0[1-9]|10)_lv(?:1|5|10|25)\.png$/;
+
+function imagePath(imageKey: string | null): string | null {
+  if (!imageKey || !IMAGE_KEY_PATTERN.test(imageKey)) return null;
+  const path = fileURLToPath(new URL(`../assets/${imageKey}`, import.meta.url));
+  return existsSync(path) ? path : null;
+}
 
 function localDateAndTime(now: Date, timezone: string): { date: string; time: string } {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -70,6 +86,39 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[]): string
   ].join("\n");
 }
 
+export function buildNotificationDigestMessages(
+  jobs: PendingNotificationJob[],
+): NotificationMessage[] {
+  const featured = jobs.filter((job) =>
+    (job.eventType === "birth" || job.eventType === "ascend") && job.yokaiId
+  );
+  if (featured.length === 0) return [{ content: formatNotificationDigest(jobs) }];
+
+  const messages: NotificationMessage[] = [];
+  for (let from = 0; from < featured.length; from += 10) {
+    const chunk = featured.slice(from, from + 10);
+    const files: NonNullable<NotificationMessage["files"]> = [];
+    const embeds = chunk.map((job) => {
+      const name = job.yokaiName ?? "名前未設定の妖怪";
+      const title = `${EVENT_LABELS[job.eventType] ?? job.eventType}：${name}`;
+      const path = imagePath(job.imageKey);
+      if (!path || !job.imageKey) return { title };
+
+      const attachmentName = `${job.id.replace(/[^a-zA-Z0-9_-]/g, "_")}-${job.imageKey}`;
+      files.push({ attachment: path, name: attachmentName });
+      return { title, image: { url: `attachment://${attachmentName}` } };
+    });
+    messages.push({
+      content: from === 0
+        ? formatNotificationDigest(jobs)
+        : `## 👻 妖怪だより（画像 ${Math.floor(from / 10) + 1}）`,
+      embeds,
+      ...(files.length > 0 ? { files } : {}),
+    });
+  }
+  return messages;
+}
+
 export class NotificationDeliveryInProgressError extends Error {
   constructor() {
     super("このサーバーの通知は別の処理で送信中です");
@@ -82,7 +131,7 @@ export class NotificationDeliveryInProgressError extends Error {
 export async function deliverPendingNotifications(
   guildId: string,
   sentAt: Date,
-  send: (content: string) => Promise<unknown>,
+  send: (messages: NotificationMessage[]) => Promise<unknown>,
 ): Promise<number> {
   if (deliveringGuilds.has(guildId)) {
     throw new NotificationDeliveryInProgressError();
@@ -95,7 +144,7 @@ export async function deliverPendingNotifications(
     const jobs = await getPendingNotificationJobs(guildId);
     if (jobs.length === 0) return 0;
 
-    await send(formatNotificationDigest(jobs));
+    await send(buildNotificationDigestMessages(jobs));
     await markNotificationJobsSent(jobs.map((job) => job.id), sentAt);
     return jobs.length;
   } finally {
@@ -121,12 +170,12 @@ export async function runScheduledNotifications(
       const count = await deliverPendingNotifications(
         schedule.guildId,
         now,
-        async (content) => {
+        async (messages) => {
           const channel = await client.channels.fetch(schedule.channelId);
           if (!channel?.isSendable()) {
             throw new Error(`通知先チャンネル ${schedule.channelId} にメッセージを送信できません`);
           }
-          await channel.send({ content });
+          for (const message of messages) await channel.send(message);
         },
       );
       if (count > 0) {

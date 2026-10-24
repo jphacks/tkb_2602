@@ -10,6 +10,9 @@ export type NotificationSchedule = {
 export type PendingNotificationJob = {
   id: string;
   eventType: string;
+  yokaiId: string | null;
+  yokaiName: string | null;
+  imageKey: string | null;
 };
 
 export async function processYokaiAscensions(
@@ -35,6 +38,13 @@ type ScheduleRow = {
 type JobRow = {
   id: string;
   event_type: string;
+  yokai_id: string | null;
+};
+
+type YokaiIdentityRow = {
+  id: string;
+  yokai_name: string | null;
+  image_key: string | null;
 };
 
 type PageResult<T> = {
@@ -83,7 +93,7 @@ export async function getPendingNotificationJobs(
   const rows = await readAllPages<JobRow>(
     (from, to) => supabase
       .from("notification_jobs")
-      .select("id, event_type")
+      .select("id, event_type, yokai_id")
       .eq("guild_id", guildId)
       .is("sent_at", null)
       .order("id")
@@ -92,7 +102,33 @@ export async function getPendingNotificationJobs(
     "未送信通知",
   );
 
-  return rows.map((row) => ({ id: row.id, eventType: row.event_type }));
+  const yokaiIds = [...new Set(rows.flatMap((row) =>
+    row.yokai_id && ["birth", "ascend"].includes(row.event_type)
+      ? [row.yokai_id]
+      : []
+  ))];
+  const identities = new Map<string, YokaiIdentityRow>();
+  for (let from = 0; from < yokaiIds.length; from += 500) {
+    const { data, error } = await supabase
+      .from("yokai_states")
+      .select("id, yokai_name, image_key")
+      .in("id", yokaiIds.slice(from, from + 500))
+      .returns<YokaiIdentityRow[]>();
+    if (error) throw new Error(`妖怪の表示情報の取得に失敗しました: ${error.message}`);
+    if (!data) throw new Error("妖怪の表示情報の取得結果がありません");
+    for (const identity of data) identities.set(identity.id, identity);
+  }
+
+  return rows.map((row) => {
+    const identity = row.yokai_id ? identities.get(row.yokai_id) : undefined;
+    return {
+      id: row.id,
+      eventType: row.event_type,
+      yokaiId: row.yokai_id,
+      yokaiName: identity?.yokai_name ?? null,
+      imageKey: identity?.image_key ?? null,
+    };
+  });
 }
 
 export async function markNotificationJobsSent(

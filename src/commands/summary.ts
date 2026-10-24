@@ -28,7 +28,10 @@ export const summary: Command = {
       const count = await deliverPendingNotifications(
         guildId,
         await getNow(guildId),
-        async (content) => interaction.editReply({ content }),
+        async (messages) => {
+          await interaction.editReply(messages[0]);
+          for (const message of messages.slice(1)) await interaction.followUp(message);
+        },
       );
       if (count === 0) {
         await interaction.editReply("未報告の妖怪の変化はありません。");
