@@ -1,6 +1,6 @@
 # 妖怪だより
 
-![妖怪だより](src/assets/cover.jpg)
+![妖怪だより](src/assets/cover.png)
 
 <p align="center"><strong>その「困った」は、妖怪のしわざ。</strong></p>
 
@@ -222,4 +222,4 @@ npm test
 
 ## 素材について
 
-妖怪・守り神の画像はHack Day前に生成AIで作成した素材です。発生時は `src/assets/birth`、成仏時は `src/assets/ascend` の同名画像を使用します。
+妖怪と守り神のイラスト65枚は、Hack Day前に生成AIで作成した素材です。
