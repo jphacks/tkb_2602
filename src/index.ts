@@ -2,6 +2,7 @@ import { Client, Events, GatewayIntentBits } from "discord.js";
 import { commands } from "./commands/index.js";
 import { discordGuildId, discordToken } from "./config.js";
 import { getLocations } from "./database/masters.js";
+import { startNotificationScheduler } from "./notifications/digest.js";
 
 // ボットの起動と、届いたインタラクションの振り分け（1番だけが編集する）
 // ほかの担当は、それぞれのフォルダに関数を作って渡すだけにする
@@ -20,6 +21,8 @@ client.once(Events.ClientReady, async (readyClient) => {
   } catch (error) {
     console.error("Supabase につながりませんでした:", error);
   }
+
+  startNotificationScheduler(readyClient);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
