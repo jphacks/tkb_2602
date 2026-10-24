@@ -104,7 +104,7 @@ await test("/summaryの手動通知", async (t) => {
     assert.equal(target.calls[1].args[0].files.length, 2);
     assert.match(
       target.calls[1].args[0].files[0].attachment,
-      /assets\/active\/yokai_Y01_lv1\.png$/,
+      /assets\/birth\/yokai_Y01_lv1\.png$/,
     );
     assert.match(
       target.calls[1].args[0].files[1].attachment,

@@ -35,7 +35,7 @@ const IMAGE_KEY_PATTERN = /^yokai_Y(?:0[1-9]|10)_lv(?:1|5|10|25)\.png$/;
 function imagePath(imageKey: string | null, eventType: string): string | null {
   if (!imageKey || !IMAGE_KEY_PATTERN.test(imageKey)) return null;
   const directory = eventType === "birth"
-    ? "active"
+    ? "birth"
     : eventType === "ascend"
       ? "ascend"
       : null;
