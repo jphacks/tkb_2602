@@ -28,6 +28,10 @@ declare
   v_level integer;
   v_task_name text;
   v_yokai_key text;
+  -- 守り神ポイント：同じ場所×やり残されていたことは1時間に1回まで
+  v_last_awarded timestamptz;
+  v_awarded boolean := false;
+  v_guardian_key text;
   v_now timestamptz := coalesce(p_now, now());
 begin
   -- 必須項目の確認
@@ -212,21 +216,52 @@ begin
     where id = v_state.id
     returning * into v_state;
 
-    -- 本人の守り神ポイントを1増やす
-    insert into public.guardian_points as gp (
-      guild_id,
-      member_key,
-      points
-    )
-    values (
-      p_guild_id,
-      p_member_key,
-      1
-    )
-    on conflict (guild_id, member_key)
-    do update set
-      points = gp.points + 1
-    returning points into v_points;
+    -- 本人の守り神ポイントを1増やす（同じ場所×やり残されていたことは、最後にもらってから1時間たっていれば）
+    select last_awarded_at
+      into v_last_awarded
+    from public.guardian_cooldowns
+    where guild_id = p_guild_id
+      and member_key = p_member_key
+      and location_id = p_location_id
+      and task_type_id = p_task_type_id
+    for update;
+
+    v_awarded := v_last_awarded is null or v_last_awarded <= v_now - interval '1 hour';
+
+    if v_awarded then
+      insert into public.guardian_points as gp (
+        guild_id,
+        member_key,
+        points
+      )
+      values (
+        p_guild_id,
+        p_member_key,
+        1
+      )
+      on conflict (guild_id, member_key)
+      do update set
+        points = gp.points + 1
+      returning points into v_points;
+
+      insert into public.guardian_cooldowns as gc (
+        guild_id, member_key, location_id, task_type_id, last_awarded_at
+      )
+      values (
+        p_guild_id, p_member_key, p_location_id, p_task_type_id, v_now
+      )
+      on conflict (guild_id, member_key, location_id, task_type_id)
+      do update set
+        last_awarded_at = excluded.last_awarded_at;
+    else
+      select points
+        into v_points
+      from public.guardian_points
+      where guild_id = p_guild_id
+        and member_key = p_member_key;
+
+      v_points := coalesce(v_points, 0);
+    end if;
 
     -- Discordへ送る内容を送信待ちとして登録する
     if v_event_type is not null then
@@ -253,9 +288,18 @@ begin
     v_level := greatest(0, v_state.report_count - v_threshold + 1);
   end if;
 
+  -- 選んだ守り神（まだ選んでいなければ null）
+  select guardian_key
+    into v_guardian_key
+  from public.guardian_points
+  where guild_id = p_guild_id
+    and member_key = p_member_key;
+
   return jsonb_build_object(
     'duplicate', v_duplicate,
     'points', v_points,
+    'pointsAwarded', v_awarded,
+    'guardianKey', v_guardian_key,
     'yokaiId', v_state.id,
     'reportCount', v_state.report_count,
     'stage', v_state.stage,

@@ -41,6 +41,9 @@ begin
   delete from public.guardian_points where guild_id = p_guild_id;
   get diagnostics v_points = row_count;
 
+  -- 守り神ポイントの「1時間に1回まで」の記録も消す（20261024_guardians.sql で作った表）
+  delete from public.guardian_cooldowns where guild_id = p_guild_id;
+
   update public.guild_settings
   set time_offset_seconds = 0
   where guild_id = p_guild_id;

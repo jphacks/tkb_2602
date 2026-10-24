@@ -17,6 +17,11 @@ export type ReportResult = {
   reportCount: number;
   stage: "presence" | "shadow" | "active" | "ascended";
   yokaiLevel: number;
+  // 守り神ポイントが今回増えたか（同じ場所×やり残されていたことは1時間に1回まで）
+  // ※ 20261024_guardians.sql の反映前の関数は返さないので、undefined のことがある
+  pointsAwarded?: boolean;
+  // 選んだ守り神（まだ選んでいなければ null。反映前は undefined）
+  guardianKey?: string | null;
 };
 
 export async function submitReport(

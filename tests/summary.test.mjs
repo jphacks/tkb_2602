@@ -108,11 +108,11 @@ await test("/summaryの手動通知", async (t) => {
     );
     assert.equal(target.calls[1].args[0].files.length, 2);
     assert.match(
-      target.calls[1].args[0].files[0].attachment,
+      target.calls[1].args[0].files[0].attachment.replaceAll("\\", "/"),
       /assets\/birth\/yokai_Y01_lv1\.png$/,
     );
     assert.match(
-      target.calls[1].args[0].files[1].attachment,
+      target.calls[1].args[0].files[1].attachment.replaceAll("\\", "/"),
       /assets\/ascend\/yokai_Y02_lv5\.png$/,
     );
     assert.equal(updates.length, 1);
