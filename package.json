@@ -7,8 +7,8 @@
     "start": "tsx src/index.ts",
     "deploy": "tsx src/deploy-commands.ts",
     "seed": "tsx scripts/seed-test-data.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.mjs"
+    "test": "node --import tsx --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

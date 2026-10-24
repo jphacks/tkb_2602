@@ -20,9 +20,9 @@ import {
 import { getLocations, getTaskTypes } from "../database/masters.js";
 import {
   getGuildSettings,
-  saveGuildSettings,
-  saveLocationNames,
-  saveTaskTypeNames,
+  saveBasicSettings,
+  saveTaskSettings,
+  SettingsValidationError,
 } from "../database/settings.js";
 import type { Command } from "./types.js";
 
@@ -54,7 +54,7 @@ function describeChanges(before: string[], after: string[]) {
 }
 
 // 念のため、コマンドの中でも管理者かどうかを確かめる（Discordの設定で一般メンバーには見えないが、二重に守る）
-async function rejectIfNotAdmin(interaction: ChatInputCommandInteraction | MessageComponentInteraction) {
+async function rejectIfNotAdmin(interaction: ChatInputCommandInteraction | MessageComponentInteraction | ModalSubmitInteraction) {
   if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return false;
   await interaction.reply({
     content: "このコマンドは、サーバー管理の権限を持つ人だけが使えます。",
@@ -162,6 +162,7 @@ export const youkaiSettei: Command = {
   },
 
   async handleModal(interaction) {
+    if (await rejectIfNotAdmin(interaction)) return;
     if (interaction.customId === "youkai-settei:basic") return saveBasic(interaction);
     if (interaction.customId === "youkai-settei:tasks") return saveTasks(interaction);
   },
@@ -213,14 +214,20 @@ async function saveBasic(interaction: ModalSubmitInteraction) {
     return;
   }
 
-  const before = (await getLocations(guildId)).map((l) => l.name);
-  await saveGuildSettings(guildId, {
-    notificationChannelId: notifyChannel.id,
-    adminChannelId: adminChannel.id,
-    digestHour,
-    digestMinute,
-  });
-  await saveLocationNames(guildId, names);
+  let before: string[];
+  try {
+    before = (await getLocations(guildId)).map((l) => l.name);
+    await saveBasicSettings(guildId, {
+      notificationChannelId: notifyChannel.id,
+      adminChannelId: adminChannel.id,
+      digestHour,
+      digestMinute,
+    }, names);
+  } catch (error) {
+    console.error("基本設定の保存に失敗しました:", error);
+    await interaction.editReply(settingsErrorMessage(error));
+    return;
+  }
 
   const next = new ButtonBuilder()
     .setCustomId("youkai-settei:open-tasks")
@@ -229,9 +236,9 @@ async function saveBasic(interaction: ModalSubmitInteraction) {
 
   await interaction.editReply({
     content: [
-      "**設定（1/2）**（※ まだ保存はされません）",
+      "✅ 基本設定と場所の一覧を保存しました（1/2）",
       `まとめ通知：<#${notifyChannel.id}> に毎日 ${formatTime(digestHour, digestMinute)}`,
-      `ひとことの届け先：<#${adminChannel.id}>（書かれたらすぐに届きます）`,
+      `ひとことの届け先：<#${adminChannel.id}>`,
       "",
       `**場所**`,
       describeChanges(before, names),
@@ -257,9 +264,15 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
     return;
   }
 
-  const before = (await getTaskTypes(guildId)).map((t) => t.name);
-  await saveGuildSettings(guildId, { birthThreshold });
-  await saveTaskTypeNames(guildId, names);
+  let before: string[];
+  try {
+    before = (await getTaskTypes(guildId)).map((t) => t.name);
+    await saveTaskSettings(guildId, birthThreshold, names);
+  } catch (error) {
+    console.error("雑務設定の保存に失敗しました:", error);
+    await interaction.followUp({ content: settingsErrorMessage(error), flags: MessageFlags.Ephemeral });
+    return;
+  }
 
   await interaction.editReply({
     content: [
@@ -270,8 +283,16 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
       "**やり残されていたこと**",
       describeChanges(before, names),
       "",
-      "✅ 設定が終わりました（※ まだ保存はされません）",
+      "✅ 出現条件とやり残されていたことの一覧を保存しました（2/2）",
     ].join("\n"),
     components: [],
   });
+}
+
+function settingsErrorMessage(error: unknown): string {
+  if (error instanceof SettingsValidationError) {
+    return `保存できませんでした。${error.message}\n入力内容を直して、もう一度お試しください。`;
+  }
+  // 応答が途切れた場合にはDBで保存済みの可能性もあるので、未保存とは断定しない。
+  return "保存結果を確認できませんでした。もう一度設定画面を開き、内容を確認してからお試しください。";
 }
