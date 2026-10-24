@@ -22,10 +22,11 @@ export type CustomYokai = {
   ascendPath: string;
 };
 
-type Idea = { name: string; visual: string };
+export type Idea = { name: string; visual: string };
 
 // 1. 名前と見た目の説明を考えてもらう。おかしな返事なら、決まった形に戻す
-async function think(taskName: string): Promise<Idea> {
+// テストから確かめられるように export している
+export async function think(taskName: string): Promise<Idea> {
   const fallback: Idea = {
     name: `${taskName}の妖怪`,
     visual: "a small everyday shared-room object that keeps getting left in a bad state",
@@ -55,7 +56,7 @@ async function think(taskName: string): Promise<Idea> {
 }
 
 // 2. 画像の指示文（yokai_image_prompts の「妖怪用」の画風を短くしたもの）
-function imagePrompt(visual: string) {
+export function imagePrompt(visual: string) {
   return [
     "Original everyday-object yokai character from a contemporary Japanese supernatural-fantasy television anime.",
     `The yokai is ${visual}.`,
