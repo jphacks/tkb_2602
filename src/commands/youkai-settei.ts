@@ -24,6 +24,7 @@ import {
   saveTaskSettings,
   SettingsValidationError,
 } from "../database/settings.js";
+import { openPendingAddModal, submitPendingAdd } from "./pending-add.js";
 import type { Command } from "./types.js";
 
 // /youkai-settei：管理者用の設定（1番）
@@ -165,10 +166,19 @@ export const youkaiSettei: Command = {
     if (await rejectIfNotAdmin(interaction)) return;
     if (interaction.customId === "youkai-settei:basic") return saveBasic(interaction);
     if (interaction.customId === "youkai-settei:tasks") return saveTasks(interaction);
+    // 管理者チャンネルの「この内容を選択肢に追加する」から開いたフォーム
+    const [, action, pendingId] = interaction.customId.split(":");
+    if (action === "pending-modal" && pendingId) return submitPendingAdd(interaction, pendingId);
   },
 
   // 「次へ」ボタン → 2枚目のモーダルを開く
+  // 「この内容を選択肢に追加する」ボタン → 新しい名前を入れるフォームを開く
   async handleComponent(interaction) {
+    const [, action, pendingId] = interaction.customId.split(":");
+    if (action === "pending-add" && pendingId && interaction.isButton()) {
+      if (await rejectIfNotAdmin(interaction)) return;
+      return openPendingAddModal(interaction, pendingId);
+    }
     if (interaction.customId !== "youkai-settei:open-tasks") return;
     if (await rejectIfNotAdmin(interaction)) return;
     const guildId = interaction.guildId!;

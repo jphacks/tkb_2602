@@ -44,6 +44,9 @@ begin
   -- 守り神ポイントの「1時間に1回まで」の記録も消す（20261024_guardians.sql で作った表）
   delete from public.guardian_cooldowns where guild_id = p_guild_id;
 
+  -- 管理者の追加待ちの観測も消す（20261024_pending_observations.sql で作った表）
+  delete from public.pending_observations where guild_id = p_guild_id;
+
   update public.guild_settings
   set time_offset_seconds = 0
   where guild_id = p_guild_id;

@@ -1,4 +1,7 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   type Client,
   LabelBuilder,
   MessageFlags,
@@ -9,6 +12,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { getLocations, getTaskTypes } from "../database/masters.js";
+import { createPendingObservation } from "../database/pending-observations.js";
 import { createReportSession } from "../database/report-session.js";
 import { submitReport } from "../database/reports.js";
 import { getYokaiIdentity } from "../database/yokai.js";
@@ -26,7 +30,13 @@ const BIRTH_FRAME_MS = 2000; // 誕生の演出で、書き換えるまでの間
 
 // ひとことを管理者チャンネルにすぐ送る。送れたら true
 // 誰が書いたかは出さず、データベースにも保存しない
-async function sendAdminNote(client: Client, channelId: string | null, context: AdminNoteContext) {
+// pendingId があれば（「一覧にない」の観測）、「選択肢に追加する」ボタンを付ける（/youkai-settei が受け取る）
+async function sendAdminNote(
+  client: Client,
+  channelId: string | null,
+  context: AdminNoteContext,
+  pendingId: string | null = null,
+) {
   if (!channelId) return false;
   try {
     const channel = await client.channels.fetch(channelId);
@@ -34,6 +44,18 @@ async function sendAdminNote(client: Client, channelId: string | null, context: 
     await channel.send({
       content: adminNoteMessage(context),
       allowedMentions: { parse: [] }, // ひとことに @everyone などが書かれていても、誰にも通知が飛ばないようにする
+      ...(pendingId
+        ? {
+            components: [
+              new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`youkai-settei:pending-add:${pendingId}`)
+                  .setLabel("この内容を選択肢に追加する")
+                  .setStyle(ButtonStyle.Primary),
+              ),
+            ],
+          }
+        : {}),
     });
     return true;
   } catch (error) {
@@ -136,9 +158,26 @@ export const youkai: Command = {
           taskTypeId === OTHER ? "一覧にない" : (taskTypes.find((t) => t.id === taskTypeId)?.name ?? "（不明）"),
       };
 
+      // 報告者IDは、そのままではなく変換した値（memberKey）にしてから使う。データベースには報告者IDは残らない
+      const session = createReportSession(guildId, interaction.user.id);
+
+      // 「一覧にない」の観測は、管理者が選択肢に追加したときに「1回目」として数えるために、一時的に置いておく
+      // （ひとことの文章は保存しない。表がまだないときは、ボタンなしで届けるだけにする）
+      const pendingId = isOther
+        ? await createPendingObservation({
+            guildId,
+            locationId: locationId === OTHER ? null : locationId,
+            taskTypeId: taskTypeId === OTHER ? null : taskTypeId,
+            memberKey: session.memberKey,
+          }).catch((error) => {
+            console.error("追加待ちの観測を保存できませんでした:", error);
+            return null;
+          })
+        : null;
+
       // ひとことは、記録の結果を待たずにすぐ管理者に届ける
       const noteSent = note
-        ? await sendAdminNote(interaction.client, settings.adminChannelId, { ...context, note })
+        ? await sendAdminNote(interaction.client, settings.adminChannelId, { ...context, note }, pendingId)
         : false;
       const noteLine = !note
         ? ""
@@ -151,14 +190,14 @@ export const youkai: Command = {
       if (isOther) {
         await interaction.editReply(
           (noteSent
-            ? "一覧にないものとして、ひとことを管理者に届けました。管理者が一覧に追加すると、次から観測できるようになります。"
-            : "一覧にないものとして受け付けましたが、ひとことを管理者に届けられませんでした（管理者チャンネルが設定されていないか、ボットが書き込めません）。管理者に知らせてください。"),
+            ? pendingId
+              ? "一覧にないものとして、ひとことを管理者に届けました。管理者が選択肢に追加すると、**この観測も1回目として数えられます**。"
+              : "一覧にないものとして、ひとことを管理者に届けました。管理者が一覧に追加すると、次から観測できるようになります。"
+            :"一覧にないものとして受け付けましたが、ひとことを管理者に届けられませんでした（管理者チャンネルが設定されていないか、ボットが書き込めません）。管理者に知らせてください。"),
         );
         return;
       }
 
-      // 報告者IDは、そのままではなく変換した値（memberKey）にしてから渡す。データベースには報告者IDは残らない
-      const session = createReportSession(guildId, interaction.user.id);
       // /demo で時間を進めているときは、アプリの中の「今」で記録する
       const offsetMs = await getTimeOffsetMs(guildId);
       const result = await submitReport({
