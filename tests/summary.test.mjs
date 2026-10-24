@@ -102,7 +102,14 @@ await test("/summaryの手動通知", async (t) => {
       ["妖怪誕生：あらいわすれ坊", "成仏：ゴミため坊"],
     );
     assert.equal(target.calls[1].args[0].files.length, 2);
-    assert.match(target.calls[1].args[0].files[0].attachment, /yokai_Y01_lv1\.png$/);
+    assert.match(
+      target.calls[1].args[0].files[0].attachment,
+      /assets\/active\/yokai_Y01_lv1\.png$/,
+    );
+    assert.match(
+      target.calls[1].args[0].files[1].attachment,
+      /assets\/ascend\/yokai_Y02_lv5\.png$/,
+    );
     assert.equal(updates.length, 1);
     assert.match(updates[0].sent_at, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(calls[0].table, "process_yokai_ascensions");

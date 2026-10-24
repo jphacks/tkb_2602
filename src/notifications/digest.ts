@@ -32,9 +32,17 @@ export type NotificationMessage = {
 
 const IMAGE_KEY_PATTERN = /^yokai_Y(?:0[1-9]|10)_lv(?:1|5|10|25)\.png$/;
 
-function imagePath(imageKey: string | null): string | null {
+function imagePath(imageKey: string | null, eventType: string): string | null {
   if (!imageKey || !IMAGE_KEY_PATTERN.test(imageKey)) return null;
-  const path = fileURLToPath(new URL(`../assets/${imageKey}`, import.meta.url));
+  const directory = eventType === "birth"
+    ? "active"
+    : eventType === "ascend"
+      ? "ascend"
+      : null;
+  if (!directory) return null;
+  const path = fileURLToPath(
+    new URL(`../assets/${directory}/${imageKey}`, import.meta.url),
+  );
   return existsSync(path) ? path : null;
 }
 
@@ -110,7 +118,7 @@ export function buildNotificationDigestMessages(
     const embeds = chunk.map((job) => {
       const name = displayYokaiName(job.yokaiName, job.imageKey);
       const title = `${EVENT_LABELS[job.eventType] ?? job.eventType}：${name}`;
-      const path = imagePath(job.imageKey);
+      const path = imagePath(job.imageKey, job.eventType);
       if (!path || !job.imageKey) return { title };
 
       const attachmentName = `${job.id.replace(/[^a-zA-Z0-9_-]/g, "_")}-${job.imageKey}`;
