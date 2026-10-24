@@ -23,6 +23,7 @@
 3. 全体チャンネルには、指定時刻に未通知の変化をまとめた「妖怪だより」が届きます。
 4. 最後の記録から一定日数が経過すると、妖怪は成仏します。
 5. 片づけを記録した本人には守り神ポイントがたまり、守り神が成長します。
+6. 一覧にない困りごとは「ひとこと」で管理者に届きます。管理者がボタン1つで選択肢に追加すると、その観測も1回目として数えられ、**その研究室だけの新しい妖怪を生成AIが作ります**。
 
 ## 主な機能
 
@@ -69,6 +70,20 @@ presence（気配） → shadow（影） → active（出現・成長） → asc
 - 初回に守り神を選択し、Lv.1 / 10 / 30 / 60 / 100 で姿が変化
 - ポイントや守り神は `/mamorigami` を実行した本人だけに表示
 
+## 新しい雑務には、その研究室だけの妖怪を
+
+研究室ごとに、困りごとは違います。そこで画像の役割を2つに分けました。
+
+| 場面 | 画像の作り方 | 理由 |
+| --- | --- | --- |
+| よくある雑務（洗い物・ゴミ・消し忘れなど10種類） | 事前に生成AIで作り込んだイラスト（妖怪40枚・守り神25枚）。成仏の姿は、それを画像処理で白黒にしてお札を重ねたもの | 一番目にふれる場面なので、画風をそろえて作り込む |
+| 管理者が新しく追加した雑務（例：紙詰まり） | **その場で生成AI（Cloudflare Workers AI）が作る**。文章のAIが名前と見た目を考え、画像のAIが姿を描き、成仏の姿は画像処理で作る | どの研究室にどんな雑務があるかは、前もって全部はわからない |
+
+- **AIに渡すのは、管理者が登録した項目の名前（「紙詰まり」など）だけ** です。報告者の自由記述は渡しません。
+- 一覧にない困りごとを「ひとこと」で報告した人の観測は、管理者が管理者チャンネルのボタンから選択肢に追加した時点で、1回目として数えます。二度押しても1回だけです。ひとことの文章そのものは保存しません。
+- AIが使えないとき（無料の範囲を超えた、通信の問題など）も、Botは止まらず、決まった妖怪のまま動き続けます（[tests/custom-yokai.test.mjs](tests/custom-yokai.test.mjs)）。
+- 実際の生成例：「紙詰まり」→「かみため坊」（[src/assets/birth/](src/assets/birth/) の `custom_*.png`）
+
 ## 技術構成
 
 ```text
@@ -84,7 +99,11 @@ Supabase（PostgreSQL / RPC）
   ├─ yokai_states       妖怪の現在状態
   ├─ notification_jobs  未送信の通知イベント
   ├─ guardian_points    守り神ポイント
-  └─ guardian_cooldowns 重複加算の抑制
+  ├─ guardian_cooldowns 重複加算の抑制
+  └─ pending_observations 一覧にない観測（管理者が追加するまで）
+
+Cloudflare Workers AI（任意）
+  └─ 新しく追加した雑務の妖怪の名前（Llama 3.1）と姿（FLUX.1 schnell）
 ```
 
 記録、妖怪状態の更新、通知ジョブの作成、守り神ポイントの加算は、`submit_report` RPC の1トランザクションで処理します。通知はDiscordへの送信が成功した後にだけ `sent_at` を更新するため、失敗した通知を再試行できます。
@@ -115,6 +134,9 @@ DISCORD_GUILD_ID=
 SUPABASE_URL=
 SUPABASE_SECRET_KEY=
 MEMBER_KEY_SECRET=
+# 任意：新しく追加した雑務の妖怪を生成AIで作る（なければ作らない）
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_API_TOKEN=
 ```
 
 `MEMBER_KEY_SECRET` は同じ値を使い続けてください。変更すると、同じ利用者でも守り神ポイント上は別人として扱われます。
@@ -129,9 +151,12 @@ Supabaseの SQL Editor で、対象環境の既存スキーマに対して次の
 4. `sql/migrations/20261024_yokai_identity.sql`
 5. `sql/migrations/20261024_guardians.sql`
 6. `sql/migrations/20261024_demo_time_offset.sql`
-7. `sql/functions/process_yokai_ascensions.sql`
-8. `sql/functions/reset_demo_data.sql`
-9. `sql/functions/submit_report.sql`
+7. `sql/migrations/20261024_pending_observations.sql`
+8. `sql/migrations/20261024_custom_yokai.sql`
+9. `sql/migrations/20261024_custom_yokai_image_key.sql`
+10. `sql/functions/process_yokai_ascensions.sql`
+11. `sql/functions/reset_demo_data.sql`
+12. `sql/functions/submit_report.sql`
 
 詳細とDB単体テストは [src/database/README.md](src/database/README.md) を参照してください。
 
@@ -174,6 +199,8 @@ npm test
 | 報告者のDiscord IDを保存する | 不採用 | 観測記録と個人が直接結びつくため。`reports`には報告者列を置かない |
 | 貢献ランキングを全体公開する | 不採用 | 監視や競争を生み、片づけた人を間接的に特定しうるため。守り神とポイントは本人だけに表示する |
 | 1回目から問題を全体公開する | 不採用 | 偶発的な1回まで問題視し、報告者の推測にもつながるため。`presence`と`shadow`は本人だけに返す |
+| 新しい雑務に、使っていない妖怪を機械的に割り当てる | 変更 | 「紙詰まり」に「もどらずピペット」が付くなど、意味の合わない妖怪が出たため。新しく追加した雑務だけ、項目の名前を渡して生成AIで妖怪を作る |
+| 一覧にない雑務は、追加後に報告し直してもらう | 変更 | ふつうより1回多く記録しないと妖怪が出ないため。管理者が追加した時点で、元の観測を1回目として数える |
 
 ### 2. 「人」ではなく「繰り返す問題」を妖怪にした
 
@@ -200,8 +227,9 @@ npm test
 
 - 成仏前の「弱ってきた」状態を妖怪だよりで知らせる
 - 出会った妖怪と個体の経歴を振り返れる妖怪図鑑
-- 研究室ごとの新しい雑務と妖怪ビジュアルを追加できる仕組み
+- 生成AIで作る妖怪も、事前のイラストと画風をそろえ、進化の姿（Lv.5 / 10 / 25）まで作る
 - 活動傾向を個人ではなく場所・雑務単位で振り返るダッシュボード
+- 研究室以外の、誰の担当でもない仕事がある場所（シェアハウス、職場、部室など）への展開。場所と雑務の一覧は管理者が自由に変えられるので、仕組みはそのまま使えます
 
 ## 開発技術
 
@@ -212,6 +240,8 @@ npm test
 - Supabase（PostgreSQL / RPC）
 - Node.js `crypto`（HMAC-SHA256）
 - Node.js Test Runner
+- Cloudflare Workers AI（Llama 3.1 8B Instruct / FLUX.1 schnell。無料の範囲で使用）
+- sharp（画像処理：成仏の姿の作成、生成画像の変換）
 
 ### 独自技術
 
@@ -219,7 +249,9 @@ npm test
 - 妖怪の出現・成長・成仏と通知ジョブを、DBトランザクションで一貫して更新する状態管理
 - 観測時刻と全体通知時刻を分離し、報告者の推測を抑えながら送信失敗を再試行できる通知処理
 - モーダル内の選択メニューと、過去データを壊さず無効化・再有効化できる管理者向け設定画面
+- 新しく追加された雑務に、項目の名前だけを渡して生成AIで妖怪を作り、失敗しても止まらない組み込み（[src/ai/](src/ai/)）
+- 一覧にない観測を一時保存し、管理者が選択肢に追加した時点で1回目として数える引き継ぎ（[src/commands/pending-add.ts](src/commands/pending-add.ts)）
 
 ## 素材について
 
-妖怪と守り神のイラスト65枚は、Hack Day前に生成AIで作成した素材です。
+妖怪と守り神のイラスト65枚は、Hack Day前に生成AIで作成した素材です。成仏の姿40枚は、Hack Day中にそのイラストを画像処理（白黒にしてお札を重ねる）して作りました。`custom_*.png` は、Hack Day中にBotの機能（Cloudflare Workers AI）で生成した画像です。

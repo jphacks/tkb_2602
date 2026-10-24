@@ -19,7 +19,8 @@ export type ReplyMessage = {
   files?: Array<{ attachment: string; name: string }>;
 };
 
-const IMAGE_KEY_PATTERN = /^yokai_Y(?:0[1-9]|10)_lv(?:1|5|10|25)\.png$/;
+// Y01〜Y10 の決まった妖怪と、AIで作った妖怪（custom_<項目のID>.png。どのレベルでも同じ画像）
+const IMAGE_KEY_PATTERN = /^(?:yokai_Y(?:0[1-9]|10)_lv(?:1|5|10|25)|custom_[0-9a-f-]{36})\.png$/;
 const EVOLUTION_LEVELS = new Set([5, 10, 25]); // 画像が変わるレベル
 const YOKAI_COLOR = 0x695099; // 青紫（妖怪の影の色）
 

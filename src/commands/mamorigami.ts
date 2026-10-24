@@ -44,7 +44,8 @@ export const mamorigami: Command = {
         record.guardianKey === key
           ? `**${GUARDIANS[key].name}** を守り神に選びました。片づけるたびに、少しずつ育っていきます。`
           : `守り神はもう選んであります（${GUARDIANS[record.guardianKey ?? "A"].name}）。`;
-      await interaction.editReply({ ...guardianCard(record.guardianKey, record.points, headline), components: [] });
+      // 選ぶ画面の小さな画像5枚は消して（attachments: []）、選んだ守り神のカードにする
+      await interaction.editReply({ ...guardianCard(record.guardianKey, record.points, headline), components: [], attachments: [] });
     } catch (error) {
       console.error("守り神を選べませんでした:", error);
       await interaction.followUp({ content: NOT_READY, flags: MessageFlags.Ephemeral });

@@ -18,7 +18,14 @@ const GUARDIAN_COLOR = 0xbe9347; // 古金
 
 export type GuardianMessage = {
   content: string;
-  embeds: Array<{ title: string; description: string; color: number; image?: { url: string }; footer?: { text: string } }>;
+  embeds: Array<{
+    title: string;
+    description: string;
+    color: number;
+    image?: { url: string };
+    thumbnail?: { url: string };
+    footer?: { text: string };
+  }>;
   files?: Array<{ attachment: string; name: string }>;
   components?: ActionRowBuilder<ButtonBuilder>[];
 };
@@ -65,7 +72,14 @@ export function guardianChoiceRows() {
   ];
 }
 
-export function guardianChoiceMessage(points: number): Omit<GuardianMessage, "embeds"> & { embeds: GuardianMessage["embeds"] } {
+// 選ぶ画面の小さな画像（assets/thumb/kami_A_lv1.png など。256×256 で軽くしてある）
+function guardianThumbPath(key: GuardianKey): string | null {
+  const path = fileURLToPath(new URL(`../assets/thumb/kami_${key}_lv1.png`, import.meta.url));
+  return existsSync(path) ? path : null;
+}
+
+export function guardianChoiceMessage(points: number): GuardianMessage {
+  const thumbs = GUARDIAN_KEYS.map((key) => ({ key, path: guardianThumbPath(key) }));
   return {
     content: [
       "## 🛡️ 守り神を選んでください",
@@ -73,11 +87,14 @@ export function guardianChoiceMessage(points: number): Omit<GuardianMessage, "em
       "選べるのは1回だけです。選ぶまでは、白狐が見守っています。",
       points > 0 ? `\nいまの守り神ポイント：**${points}**` : "",
     ].join("\n"),
-    embeds: GUARDIAN_KEYS.map((key) => ({
+    // 5体それぞれのカードの右に、こまもり（Lv1）の姿を小さく出す
+    embeds: thumbs.map(({ key, path }) => ({
       title: GUARDIANS[key].name,
       description: GUARDIANS[key].description,
       color: GUARDIAN_COLOR,
+      ...(path ? { thumbnail: { url: `attachment://choice_kami_${key}.png` } } : {}),
     })),
+    files: thumbs.flatMap(({ key, path }) => (path ? [{ attachment: path, name: `choice_kami_${key}.png` }] : [])),
     components: guardianChoiceRows(),
   };
 }
