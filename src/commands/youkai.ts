@@ -228,7 +228,8 @@ export const youkai: Command = {
           await interaction.editReply({ ...reply, content: reply.content + noteLine });
         }
       } else {
-        await interaction.editReply(reportReply(result, context) + noteLine);
+        const reply = reportReply(result, context);
+        await interaction.editReply({ ...reply, content: reply.content + noteLine });
       }
 
       // 守り神（本人にだけ見える、別のメッセージで出す）
