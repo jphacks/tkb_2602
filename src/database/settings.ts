@@ -1,9 +1,5 @@
 import { supabase } from "./client.js";
 
-// サーバーごとの設定（2番）
-// ※ 1番が /youkai-settei のために作った仮版。読む部分は既存の guild_settings から読み、
-//   保存する部分（save〜）はまだ中身がない。2番の設計に合わせて自由に直してください
-
 export type GuildSettings = {
   notificationChannelId: string | null; // まとめ通知を送るチャンネル（#妖怪だより）
   adminChannelId: string | null; // 管理者に「ひとこと」を届けるチャンネル
@@ -12,43 +8,129 @@ export type GuildSettings = {
   birthThreshold: number; // 何度目の記録で妖怪が出現するか
 };
 
-const DEFAULT_DIGEST_HOUR = 18;
-const DEFAULT_DIGEST_MINUTE = 0;
+type SettingsRow = {
+  notification_channel_id: string | null;
+  admin_channel_id: string | null;
+  digest_time: string;
+  birth_threshold: number;
+};
+
+// 入力を直せば保存できるエラー。通信障害や内部エラーとは分けて画面に伝える。
+export class SettingsValidationError extends Error {}
+
+function validateGuildId(guildId: string) {
+  if (typeof guildId !== "string" || !guildId.trim()) {
+    throw new SettingsValidationError("サーバーIDを指定してください。");
+  }
+}
 
 export async function getGuildSettings(guildId: string): Promise<GuildSettings> {
+  validateGuildId(guildId);
   const { data, error } = await supabase
     .from("guild_settings")
-    .select("notification_channel_id, admin_channel_id, birth_threshold")
+    .select("notification_channel_id, admin_channel_id, digest_time, birth_threshold")
     .eq("guild_id", guildId)
-    .maybeSingle();
+    .maybeSingle<SettingsRow>();
   if (error) throw error;
+
+  const time = data?.digest_time ?? "18:00:00";
+  const match = /^(\d{2}):(00|30):00(?:\.0+)?$/.exec(time);
+  if (!match || Number(match[1]) > 23) {
+    throw new Error("保存されている通知時刻が不正です。");
+  }
 
   return {
     notificationChannelId: data?.notification_channel_id ?? null,
     adminChannelId: data?.admin_channel_id ?? null,
-    // TODO（2番）：guild_settings に「まとめ通知の時刻」の列（例：digest_time time default '18:00'）を足して、ここで読む
-    digestHour: DEFAULT_DIGEST_HOUR,
-    digestMinute: DEFAULT_DIGEST_MINUTE,
+    digestHour: Number(match[1]),
+    digestMinute: Number(match[2]),
     birthThreshold: data?.birth_threshold ?? 3,
   };
 }
 
-// TODO（2番）：設定を guild_settings に保存する（なければ行を作る）
-// モーダルが2枚に分かれているので、渡された項目だけを書き換える（渡されなかった項目はそのまま）
+function settingsPatch(settings: Partial<GuildSettings>): Record<string, string | number | null> {
+  const fields = {
+    notificationChannelId: "notification_channel_id",
+    adminChannelId: "admin_channel_id",
+    digestHour: "digest_hour",
+    digestMinute: "digest_minute",
+    birthThreshold: "birth_threshold",
+  } as const;
+  const patch: Record<string, string | number | null> = {};
+  for (const key of Object.keys(settings)) {
+    if (!Object.hasOwn(fields, key)) throw new SettingsValidationError("未対応の設定項目です。");
+    const field = key as keyof GuildSettings;
+    const value = settings[field];
+    // undefinedは「変更しない」、チャンネルのnullは「設定を解除する」。
+    if (value === undefined) continue;
+    if (field === "notificationChannelId" || field === "adminChannelId") {
+      if (value !== null && (typeof value !== "string" || !/^\d{17,20}$/.test(value))) {
+        throw new SettingsValidationError("チャンネルIDが不正です。");
+      }
+    } else if (typeof value !== "number" || !Number.isInteger(value)
+      || (field === "digestHour" && (value < 0 || value > 23))
+      || (field === "digestMinute" && value !== 0 && value !== 30)
+      || (field === "birthThreshold" && (value < 1 || value > 2147483647))) {
+      throw new SettingsValidationError("通知時刻または出現回数が不正です。");
+    }
+    patch[fields[field]] = value;
+  }
+  return patch;
+}
+
+function normalizeNames(names: string[]): string[] {
+  if (!Array.isArray(names) || names.some((name) => typeof name !== "string")) {
+    throw new SettingsValidationError("一覧には名前を指定してください。");
+  }
+  const normalized = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+  if (normalized.length === 0) throw new SettingsValidationError("一覧には1つ以上書いてください。");
+  if (normalized.some((name) => [...name].length > 50 || /[\r\n]/.test(name))) {
+    throw new SettingsValidationError("名前は改行を含めず、50文字以内にしてください。");
+  }
+  return normalized;
+}
+
+async function saveConfiguration(
+  guildId: string,
+  settings: Partial<GuildSettings>,
+  locationNames?: string[],
+  taskTypeNames?: string[],
+): Promise<void> {
+  validateGuildId(guildId);
+  const { error } = await supabase.rpc("save_guild_settings", {
+    p_guild_id: guildId,
+    p_settings: settingsPatch(settings),
+    p_location_names: locationNames === undefined ? null : normalizeNames(locationNames),
+    p_task_type_names: taskTypeNames === undefined ? null : normalizeNames(taskTypeNames),
+  });
+  if (error) {
+    if (error.code === "22023") throw new SettingsValidationError(error.message);
+    throw new Error(`設定の保存に失敗しました: ${error.message}`);
+  }
+}
+
+// 1枚のモーダルの変更を、1回のRPC（トランザクション）でまとめて保存する。
+export async function saveBasicSettings(
+  guildId: string,
+  settings: Pick<GuildSettings, "notificationChannelId" | "adminChannelId" | "digestHour" | "digestMinute">,
+  names: string[],
+): Promise<void> {
+  await saveConfiguration(guildId, settings, names);
+}
+
+export async function saveTaskSettings(guildId: string, birthThreshold: number, names: string[]): Promise<void> {
+  await saveConfiguration(guildId, { birthThreshold }, undefined, names);
+}
+
+// 個別の更新にも対応。省略した設定や一覧は変更しない。
 export async function saveGuildSettings(guildId: string, settings: Partial<GuildSettings>): Promise<void> {
-  console.log(`[未保存] 設定 ${guildId}`, settings);
+  await saveConfiguration(guildId, settings);
 }
 
-// TODO（2番）：場所の一覧を、渡された名前のとおりにそろえる
-//   ・一覧にない名前は追加する
-//   ・一覧から消えた名前は削除せず is_active = false にする（妖怪や記録とのつながりを残すため）
-//   ・使わない状態の名前がまた入ってきたら is_active = true に戻す
 export async function saveLocationNames(guildId: string, names: string[]): Promise<void> {
-  console.log(`[未保存] 場所の一覧 ${guildId}`, names);
+  await saveConfiguration(guildId, {}, names);
 }
 
-// TODO（2番）：やり残されていたことの一覧を、渡された名前のとおりにそろえる（場所と同じ考え方）
-//   新しく追加したものには、まだ使っていない妖怪（Y01〜Y10）を割り当てる
 export async function saveTaskTypeNames(guildId: string, names: string[]): Promise<void> {
-  console.log(`[未保存] やり残されていたことの一覧 ${guildId}`, names);
+  await saveConfiguration(guildId, {}, undefined, names);
 }
