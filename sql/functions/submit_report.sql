@@ -146,16 +146,17 @@ begin
       else 'shadow'
     end;
 
-    -- 公開通知が必要か判定する
-    if v_stage = 'active' then
-      if v_state.born_at is null
+    -- まとめ通知に載せる出来事を決める
+    -- 気配・影も登録する（まとめ通知では数だけを出す）
+    -- ※ v_state はまだ更新前なので、stage と born_at は「この記録の前」の状態
+    v_event_type := case
+      when v_stage = 'presence' then 'presence'
+      when v_stage = 'shadow' then 'shadow'
+      when v_state.born_at is null
         or v_state.stage = 'ascended'
-      then
-        v_event_type := 'birth';
-      else
-        v_event_type := 'level_up';
-      end if;
-    end if;
+        then 'birth'
+      else 'level_up'
+    end;
 
     update public.yokai_states
     set
