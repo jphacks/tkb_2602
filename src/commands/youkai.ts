@@ -11,8 +11,8 @@ import { getLocations, getTaskTypes } from "../database/masters.js";
 import type { MasterItem } from "../types.js";
 import type { Command } from "./types.js";
 
-// /youkai-kansoku：妖怪の観測記録（1番）。片づけたこと＝妖怪のしわざを見つけたことを記録する
-// A案：モーダルの中に「場所」「片づけたこと」の選択メニューと「ひとこと」を置く
+// /youkai：妖怪観測書（1番）。やり残されていたこと（＝妖怪のしわざ）を見つけて片づけたことを記録する
+// A案：モーダルの中に「場所」「やり残されていたこと」の選択メニューと「ひとこと」を置く
 // ※ モーダルは最初の返事なので deferReply できない。一覧の取得を含めて3秒以内に開く必要がある
 
 const OTHER = "other"; // 「一覧にない場所」「その他」を選んだときの値
@@ -25,8 +25,8 @@ function toOptions(items: MasterItem[], otherLabel: string) {
   ];
 }
 
-export const kansoku: Command = {
-  data: new SlashCommandBuilder().setName("youkai-kansoku").setDescription("片づけたことを記録して、妖怪のしわざを観測します"),
+export const youkai: Command = {
+  data: new SlashCommandBuilder().setName("youkai").setDescription("やり残されていたことを記録して、妖怪を観測します"),
 
   async execute(interaction) {
     const received = Date.now() - interaction.createdTimestamp;
@@ -38,27 +38,27 @@ export const kansoku: Command = {
     const fetchMs = Date.now() - fetchStart;
 
     const modal = new ModalBuilder()
-      .setCustomId("kansoku:modal")
-      .setTitle("妖怪の観測記録")
+      .setCustomId("youkai:modal")
+      .setTitle("妖怪観測書")
       .addLabelComponents(
         new LabelBuilder().setLabel("場所").setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
-            .setCustomId("kansoku:location")
+            .setCustomId("youkai:location")
             .setPlaceholder("場所を選んでください")
             .addOptions(toOptions(locations, "一覧にない場所")),
         ),
-        new LabelBuilder().setLabel("片づけたこと").setStringSelectMenuComponent(
+        new LabelBuilder().setLabel("やり残されていたこと").setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
-            .setCustomId("kansoku:task")
-            .setPlaceholder("片づけたことを選んでください")
+            .setCustomId("youkai:task")
+            .setPlaceholder("やり残されていたことを選んでください")
             .addOptions(toOptions(taskTypes, "その他")),
         ),
         new LabelBuilder()
-          .setLabel("ひとこと（任意）")
+          .setLabel("ひとこと")
           .setDescription("一覧にないときだけ。管理者だけに届き、公開されません")
           .setTextInputComponent(
             new TextInputBuilder()
-              .setCustomId("kansoku:note")
+              .setCustomId("youkai:note")
               .setStyle(TextInputStyle.Short)
               .setMaxLength(50)
               .setRequired(false),
@@ -70,7 +70,7 @@ export const kansoku: Command = {
     // 計測：3秒に間に合っているかを確かめる（A案で大丈夫か判断するため）
     const total = Date.now() - interaction.createdTimestamp;
     console.log(
-      `[計測] /youkai-kansoku 受信まで ${received}ms ＋ Supabase ${fetchMs}ms → モーダルまで合計 ${total}ms` +
+      `[計測] /youkai 受信まで ${received}ms ＋ Supabase ${fetchMs}ms → モーダルまで合計 ${total}ms` +
         (total > 2500 ? " ⚠️ 3秒に近い" : ""),
     );
   },
@@ -79,9 +79,9 @@ export const kansoku: Command = {
     // ここから先はデータベースを使うので、先に「考え中…」を出す（本人にだけ見える）
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const locationId = interaction.fields.getStringSelectValues("kansoku:location")[0];
-    const taskTypeId = interaction.fields.getStringSelectValues("kansoku:task")[0];
-    const note = interaction.fields.getTextInputValue("kansoku:note");
+    const locationId = interaction.fields.getStringSelectValues("youkai:location")[0];
+    const taskTypeId = interaction.fields.getStringSelectValues("youkai:task")[0];
+    const note = interaction.fields.getTextInputValue("youkai:note");
 
     if (note) {
       // TODO（1番）：管理者だけが見られる場所に送る。誰が書いたかは出さない。保存もしない
