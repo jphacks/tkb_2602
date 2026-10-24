@@ -87,9 +87,42 @@ begin
   if v_count <> 1 then
     raise exception '誕生通知の件数が不正: %', v_count;
   end if;
+
+  -- 気配（1回目）と影（2回目）も1件ずつ登録されている（二重送信の分は増えない）
+  select count(*) into v_count
+  from public.notification_jobs
+  where guild_id = v_guild
+    and event_type = 'presence';
+
+  if v_count <> 1 then
+    raise exception '気配の通知の件数が不正: %', v_count;
+  end if;
+
+  select count(*) into v_count
+  from public.notification_jobs
+  where guild_id = v_guild
+    and event_type = 'shadow';
+
+  if v_count <> 1 then
+    raise exception '影の通知の件数が不正: %', v_count;
+  end if;
+
+  -- 4回目はレベルアップとして登録される
+  v_result := public.submit_report(
+    gen_random_uuid(), v_guild, v_location, v_task, 'test-member'
+  );
+
+  select count(*) into v_count
+  from public.notification_jobs
+  where guild_id = v_guild
+    and event_type = 'level_up';
+
+  if v_count <> 1 then
+    raise exception 'レベルアップの通知の件数が不正: %', v_count;
+  end if;
 end;
 $test$;
 
-select 'テスト成功：初回・二重送信・誕生・通知登録を確認' as result;
+select 'テスト成功：初回・二重送信・誕生・通知登録（気配・影・誕生・レベルアップ）を確認' as result;
 
 rollback;
