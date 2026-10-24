@@ -96,6 +96,9 @@ export function reportReply(result: ReportResult, context: ReplyContext): string
 }
 
 function pointsLine(result: ReportResult) {
+  if (!result.duplicate && result.pointsAwarded === false) {
+    return `守り神ポイント：${result.points}（同じ場所の同じことは、1時間に1回まで増えます）`;
+  }
   return `守り神ポイント：${result.points}`;
 }
 

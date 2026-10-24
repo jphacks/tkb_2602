@@ -12,6 +12,8 @@ import { getLocations, getTaskTypes } from "../database/masters.js";
 import { createReportSession } from "../database/report-session.js";
 import { submitReport } from "../database/reports.js";
 import { getYokaiIdentity } from "../database/yokai.js";
+import { didGuardianEvolve, isGuardianKey } from "../logic/guardian.js";
+import { guardianCard, guardianChoiceMessage } from "../notifications/guardian-card.js";
 import { getGuildSettings } from "../database/settings.js";
 import { type AdminNoteContext, adminNoteMessage } from "../notifications/admin-note.js";
 import { birthFrames, evolutionReply, isBirth, isEvolution, reportReply } from "../notifications/report-reply.js";
@@ -188,6 +190,20 @@ export const youkai: Command = {
         }
       } else {
         await interaction.editReply(reportReply(result, context) + noteLine);
+      }
+
+      // 守り神（本人にだけ見える、別のメッセージで出す）
+      //   ・ポイントで段階が上がったら、進化した姿を見せる
+      //   ・まだ守り神を選んでいなければ、選ぶボタンを出す（guardianKey が null のときだけ。関数の反映前は undefined なので出さない）
+      if (result.pointsAwarded && didGuardianEvolve(result.points - 1, result.points)) {
+        const guardianKey = isGuardianKey(result.guardianKey) ? result.guardianKey : null;
+        await interaction.followUp({
+          ...guardianCard(guardianKey, result.points, "🛡️ **守り神が進化しました！**"),
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      if (!result.duplicate && result.guardianKey === null) {
+        await interaction.followUp({ ...guardianChoiceMessage(result.points), flags: MessageFlags.Ephemeral });
       }
     } catch (error) {
       // 「考え中…」のまま止まらないように、失敗したことを本人に伝える
