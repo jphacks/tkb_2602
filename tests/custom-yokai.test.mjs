@@ -55,6 +55,13 @@ await test("AIで作る妖怪（Cloudflare Workers AI）", async (t) => {
     assert.match(idea.visual, /printer/);
   });
 
+  await t.test("返事が読み取り済みのオブジェクトで返ってきても使える（Cloudflare の JSON の返し方）", async () => {
+    reply = ok({ response: { name: "かみはれ", visual: "a jammed paper shredder with a torn piece of paper stuck inside" } });
+    const idea = await ai.think("紙詰まり");
+    assert.equal(idea.name, "かみはれ");
+    assert.match(idea.visual, /shredder/);
+  });
+
   await t.test("AIに渡すのは、管理者が登録した項目の名前だけ", async () => {
     requests = [];
     reply = ok({ response: '{"name": "かみづまり小僧", "visual": "a small office printer with a paper jam"}' });

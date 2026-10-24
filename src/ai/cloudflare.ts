@@ -29,7 +29,7 @@ async function run<T>(model: string, body: unknown): Promise<T> {
 
 // 文章のAI。返事の文字列を返す
 export async function generateText(system: string, user: string): Promise<string> {
-  const result = await run<{ response?: string }>(TEXT_MODEL, {
+  const result = await run<{ response?: unknown }>(TEXT_MODEL, {
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
@@ -37,7 +37,10 @@ export async function generateText(system: string, user: string): Promise<string
     max_tokens: 300,
     temperature: 0.7,
   });
-  return result.response ?? "";
+  // 返事が JSON の形だと、文字ではなく読み取り済みのオブジェクトで返ってくることがあるので、文字にそろえる
+  const response = result.response;
+  if (typeof response === "string") return response;
+  return response == null ? "" : JSON.stringify(response);
 }
 
 // 画像のAI（FLUX.1 schnell）。JPEG の画像を返す

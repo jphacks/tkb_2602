@@ -128,7 +128,8 @@ export async function createCustomYokai(guildId: string, taskTypeId: string, tas
     .eq("guild_id", guildId)
     .eq("task_type_id", taskTypeId)
     .in("stage", ["active", "ascended"]);
-  if (born.error) throw new Error(`生まれている妖怪の更新に失敗しました: ${born.error.message}`);
+  // すでに生まれている妖怪の差し替えに失敗しても、項目には保存できているので、次に生まれる妖怪からは反映される
+  if (born.error) console.error(`[AI] すでに生まれている妖怪は差し替えられませんでした（次に生まれる妖怪から反映されます）: ${born.error.message}`);
 
   console.log(`[AI] 「${taskName}」の妖怪を作りました：${idea.name}（${imageKey}）`);
   return { name: idea.name, imageKey, birthPath, ascendPath };
