@@ -41,7 +41,10 @@ export const youkai: Command = {
       .setCustomId("youkai:modal")
       .setTitle("妖怪観測書")
       .addLabelComponents(
-        new LabelBuilder().setLabel("場所").setStringSelectMenuComponent(
+        new LabelBuilder()
+          .setLabel("場所")
+          .setDescription("一覧にないときは、下の「ひとこと」の欄に記入してください")
+          .setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId("youkai:location")
             .setPlaceholder("場所を選んでください")
@@ -55,7 +58,7 @@ export const youkai: Command = {
         ),
         new LabelBuilder()
           .setLabel("ひとこと")
-          .setDescription("一覧にないときだけ。管理者だけに届き、公開されません")
+          .setDescription("管理者だけに届き、公開されません")
           .setTextInputComponent(
             new TextInputBuilder()
               .setCustomId("youkai:note")
