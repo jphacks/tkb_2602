@@ -1,20 +1,4 @@
-import "dotenv/config";
-import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./client.js";
-
-const url = process.env.SUPABASE_URL;
-const secretKey = process.env.SUPABASE_SECRET_KEY;
-
-if (!url || !secretKey) {
-  throw new Error("Supabaseの環境変数が未設定です");
-}
-
-const supabase = createClient(url, secretKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-});
 
 export type ReportInput = {
   requestId: string;
