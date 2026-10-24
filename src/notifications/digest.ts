@@ -32,8 +32,14 @@ export type NotificationMessage = {
 
 const IMAGE_KEY_PATTERN = /^yokai_Y(?:0[1-9]|10)_lv(?:1|5|10|25)\.png$/;
 
-function imagePath(imageKey: string | null): string | null {
+// 成仏のときは、白黒にしてお札を貼った画像（assets/ascended/ に同じファイル名で置いてある）を使う。
+// 成仏版がなければ、ふつうの画像にする（npm run make-ascended-images で作れる）
+function imagePath(imageKey: string | null, ascended = false): string | null {
   if (!imageKey || !IMAGE_KEY_PATTERN.test(imageKey)) return null;
+  if (ascended) {
+    const ascendedPath = fileURLToPath(new URL(`../assets/ascended/${imageKey}`, import.meta.url));
+    if (existsSync(ascendedPath)) return ascendedPath;
+  }
   const path = fileURLToPath(new URL(`../assets/${imageKey}`, import.meta.url));
   return existsSync(path) ? path : null;
 }
@@ -110,7 +116,7 @@ export function buildNotificationDigestMessages(
     const embeds = chunk.map((job) => {
       const name = displayYokaiName(job.yokaiName, job.imageKey);
       const title = `${EVENT_LABELS[job.eventType] ?? job.eventType}：${name}`;
-      const path = imagePath(job.imageKey);
+      const path = imagePath(job.imageKey, job.eventType === "ascend");
       if (!path || !job.imageKey) return { title };
 
       const attachmentName = `${job.id.replace(/[^a-zA-Z0-9_-]/g, "_")}-${job.imageKey}`;

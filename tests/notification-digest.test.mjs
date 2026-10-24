@@ -118,7 +118,7 @@ await test("notification_jobsの定時通知", async (t) => {
   };
   console.error = () => {};
 
-  const { formatNotificationDigest, runScheduledNotifications } = await import(
+  const { buildNotificationDigestMessages, formatNotificationDigest, runScheduledNotifications } = await import(
     pathToFileURL(resolve("src/notifications/digest.ts")).href
   );
 
@@ -175,6 +175,16 @@ await test("notification_jobsの定時通知", async (t) => {
     await runScheduledNotifications(client, async () => now);
     assert.equal(messages.length, 1);
     assert.equal(updates.length, 1);
+  });
+
+  await t.test("成仏は白黒にお札を貼った画像、誕生はふつうの画像を添付する", () => {
+    const [message] = buildNotificationDigestMessages([
+      { id: "a", eventType: "birth", yokaiId: "y-1", yokaiName: "あらいわすれ坊", imageKey: "yokai_Y01_lv1.png" },
+      { id: "b", eventType: "ascend", yokaiId: "y-2", yokaiName: "つくえふさぎ", imageKey: "yokai_Y04_lv25.png" },
+    ]);
+    const paths = message.files.map((file) => file.attachment.replaceAll("\\", "/"));
+    assert.match(paths[0], /assets\/yokai_Y01_lv1\.png$/);
+    assert.match(paths[1], /assets\/ascended\/yokai_Y04_lv25\.png$/);
   });
 
   await t.test("通知文は未知のevent_typeも件数表示する", () => {
