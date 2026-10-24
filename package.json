@@ -8,12 +8,14 @@
     "deploy": "tsx src/deploy-commands.ts",
     "seed": "tsx scripts/seed-test-data.ts",
     "test": "node --import tsx --test tests/*.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "make-custom-yokai": "tsx scripts/make-custom-yokai.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
     "discord.js": "^14.27.0",
-    "dotenv": "^18.0.9"
+    "dotenv": "^18.0.9",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

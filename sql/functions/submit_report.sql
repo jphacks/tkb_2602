@@ -27,6 +27,9 @@ declare
   v_duplicate boolean;
   v_level integer;
   v_task_name text;
+  -- 管理者が追加した項目のために、AIで作った妖怪（20261024_custom_yokai.sql）。なければ null
+  v_custom_name text;
+  v_custom_image text;
   v_yokai_key text;
   -- 守り神ポイント：同じ場所×やり残されていたことは1時間に1回まで
   v_last_awarded timestamptz;
@@ -67,8 +70,8 @@ begin
   end if;
 
   -- 雑務がこのサーバーの有効な選択肢か確認
-  select name, yokai_key
-    into v_task_name, v_yokai_key
+  select name, yokai_key, custom_yokai_name, custom_image_key
+    into v_task_name, v_yokai_key, v_custom_name, v_custom_image
   from public.task_types
   where id = p_task_type_id
     and guild_id = p_guild_id
@@ -187,6 +190,10 @@ begin
       yokai_name = case
         when v_stage = 'active'
           and (yokai_name is null or yokai_name = v_task_name || 'の妖怪')
+          and v_custom_name is not null
+          then v_custom_name
+        when v_stage = 'active'
+          and (yokai_name is null or yokai_name = v_task_name || 'の妖怪')
           then case v_yokai_key
             when 'Y01' then 'あらいわすれ坊'
             when 'Y02' then 'ゴミため坊'
@@ -203,6 +210,8 @@ begin
         else yokai_name
       end,
       image_key = case
+        -- AIで作った妖怪は、どのレベルでも同じ画像
+        when v_stage = 'active' and v_custom_image is not null then v_custom_image
         when v_stage = 'active' and v_yokai_key ~ '^Y(0[1-9]|10)$' then
           'yokai_' || v_yokai_key || '_lv' ||
           case

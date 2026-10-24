@@ -14,6 +14,7 @@ import {
 } from "../database/pending-observations.js";
 import { submitReport } from "../database/reports.js";
 import { saveLocationNames, saveTaskTypeNames } from "../database/settings.js";
+import { startCustomYokaiCreation } from "../ai/announce.js";
 import { getTimeOffsetMs } from "../time.js";
 
 // 管理者チャンネルの「この内容を選択肢に追加する」ボタン（1番）
@@ -113,6 +114,8 @@ export async function submitPendingAdd(interaction: ModalSubmitInteraction, pend
       const result = await ensureItem(guildId, name, getTaskTypes, saveTaskTypeNames);
       taskTypeId = result.id;
       lines.push(result.added ? `やり残されていたことに「${name}」を追加しました` : `「${name}」はもう一覧にあったので、それを使いました`);
+      // 新しく足した項目には、その項目のための妖怪を AI で作り始める（待たない。できたら管理者チャンネルに知らせる）
+      if (result.added) startCustomYokaiCreation(interaction.client, guildId, result.id, name);
     }
 
     // 最初の観測を記録する。request_id に追加待ちのIDを使うので、二度押しても1回しか数えない

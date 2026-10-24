@@ -24,6 +24,7 @@ import {
   saveTaskSettings,
   SettingsValidationError,
 } from "../database/settings.js";
+import { startCustomYokaiCreation } from "../ai/announce.js";
 import { openPendingAddModal, submitPendingAdd } from "./pending-add.js";
 import type { Command } from "./types.js";
 
@@ -278,6 +279,13 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
   try {
     before = (await getTaskTypes(guildId)).map((t) => t.name);
     await saveTaskSettings(guildId, birthThreshold, names);
+    // 新しく足した項目には、その項目のための妖怪を AI で作り始める（待たない。できたら管理者チャンネルに知らせる）
+    const added = names.filter((name) => !before.includes(name));
+    if (added.length > 0) {
+      for (const task of (await getTaskTypes(guildId)).filter((t) => added.includes(t.name))) {
+        startCustomYokaiCreation(interaction.client, guildId, task.id, task.name);
+      }
+    }
   } catch (error) {
     console.error("雑務設定の保存に失敗しました:", error);
     await interaction.followUp({ content: settingsErrorMessage(error), flags: MessageFlags.Ephemeral });
