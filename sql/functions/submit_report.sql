@@ -1,11 +1,16 @@
 begin;
 
+-- 引数を足したので、古い形（5つの引数）の関数を消してから作り直す（両方あると呼び分けられなくなるため）
+drop function if exists public.submit_report(uuid, text, uuid, uuid, text);
+
 create or replace function public.submit_report(
   p_request_id uuid,
   p_guild_id text,
   p_location_id uuid,
   p_task_type_id uuid,
-  p_member_key text
+  p_member_key text,
+  -- アプリの中の「今」（getNow()）。デモで時間を進めたときのため。省略したら本当の今
+  p_now timestamptz default null
 )
 returns jsonb
 language plpgsql
@@ -23,7 +28,7 @@ declare
   v_level integer;
   v_task_name text;
   v_yokai_key text;
-  v_now timestamptz := now();
+  v_now timestamptz := coalesce(p_now, now());
 begin
   -- 必須項目の確認
   if p_request_id is null
@@ -74,13 +79,15 @@ begin
     request_id,
     guild_id,
     location_id,
-    task_type_id
+    task_type_id,
+    created_at
   )
   values (
     p_request_id,
     p_guild_id,
     p_location_id,
-    p_task_type_id
+    p_task_type_id,
+    v_now
   )
   on conflict (request_id) do nothing
   returning id into v_report_id;
@@ -259,11 +266,11 @@ $$;
 
 -- この関数はBotのサーバー側からだけ実行する
 revoke all on function public.submit_report(
-  uuid, text, uuid, uuid, text
+  uuid, text, uuid, uuid, text, timestamptz
 ) from public, anon, authenticated;
 
 grant execute on function public.submit_report(
-  uuid, text, uuid, uuid, text
+  uuid, text, uuid, uuid, text, timestamptz
 ) to service_role;
 
 commit;

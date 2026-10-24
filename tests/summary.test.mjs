@@ -39,6 +39,11 @@ await test("/summaryの手動通知", async (t) => {
       headers: { "Content-Type": "application/json" },
     });
 
+    // getNow() が読む「時間のずれ」。順番の確認には含めない
+    if (table === "guild_settings" && request.method === "GET") {
+      assert.match(url.searchParams.get("select"), /time_offset_seconds/);
+      return respond([{ time_offset_seconds: 0 }]);
+    }
     calls.push({ table, method: request.method, body: request.method === "POST" ? await request.clone().json() : null });
     if (table === "process_yokai_ascensions") {
       assert.equal(request.method, "POST");

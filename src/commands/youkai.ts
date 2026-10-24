@@ -14,6 +14,7 @@ import { submitReport } from "../database/reports.js";
 import { getGuildSettings } from "../database/settings.js";
 import { type AdminNoteContext, adminNoteMessage } from "../notifications/admin-note.js";
 import { birthFrames, isBirth, reportReply } from "../notifications/report-reply.js";
+import { getTimeOffsetMs } from "../time.js";
 import type { MasterItem } from "../types.js";
 import type { Command } from "./types.js";
 
@@ -155,12 +156,15 @@ export const youkai: Command = {
 
       // 報告者IDは、そのままではなく変換した値（memberKey）にしてから渡す。データベースには報告者IDは残らない
       const session = createReportSession(guildId, interaction.user.id);
+      // /demo で時間を進めているときは、アプリの中の「今」で記録する
+      const offsetMs = await getTimeOffsetMs(guildId);
       const result = await submitReport({
         requestId: session.requestId,
         guildId,
         locationId,
         taskTypeId,
         memberKey: session.memberKey,
+        now: offsetMs > 0 ? new Date(Date.now() + offsetMs) : undefined,
       });
       console.log(`[記録] 回数 ${result.reportCount} / 状態 ${result.stage} / Lv.${result.yokaiLevel}`);
 
