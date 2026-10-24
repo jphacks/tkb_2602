@@ -62,17 +62,21 @@ await saveTaskSettings(guildId, 3, ["洗い物", "ごみ出し"]);
 
 最初に`sql/migrations/20261024_notification_delivery.sql`をSupabaseのSQL Editorで実行し、
 `notification_jobs.sent_at`と未送信検索用インデックスを追加します。
+続けて`sql/functions/process_yokai_ascensions.sql`を実行し、成仏判定用のDB関数を追加します。
 
-Bot起動中は30秒ごとに各Guildの設定を確認し、`notification_time`がそのGuildの`timezone`で
+Bot起動中は1分ごとに各Guildの設定を確認し、`notification_time`がそのGuildの`timezone`で
 現在時刻と一致したとき、`notification_jobs.sent_at is null`の行をまとめて通知します。
 `/summary`を使うと、同じ未送信行をその場で集計し、コマンドを使ったチャンネルへ全員に見える形で通知できます。
+定時通知・`/summary`とも、通知ジョブを読む前に、`stage = active`かつ
+`last_reported_at + guild_settings.jobutsu_days <= 現在時刻`の妖怪を成仏させます。
+成仏への状態更新と`ascend`通知ジョブの登録はDB内の同じトランザクションで行います。
 定時通知・手動通知とも、Discordへの送信成功後にだけ`sent_at`を更新します。送信失敗時は未送信のまま残り、定時通知は同じ時刻枠で再試行します。
 
 - `presence`・`shadow`はプライバシー保護のため場所を表示せず、件数だけ通知する。
 - `birth`・`level_up`・`weaken`・`ascend`も現在は件数で通知する。
 - 未送信行が0件ならDiscordへ投稿しない。
 - Botが通知時刻の1分間を通して停止していた場合、その日の通知は翌日の指定時刻まで待つ。
-- 実DBへは、設定保存SQL、通知配信migration、必要ならPR #5のevent type migrationの順で適用する。
+- 実DBへは、設定保存SQL、通知配信migration、PR #5のevent type migration、成仏判定SQL、最新の報告関数の順で適用する。
 
 ## 定期報告用のデータ取得
 
