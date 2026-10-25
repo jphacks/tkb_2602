@@ -17,6 +17,11 @@
 
 ## 設定画面からの保存
 
+### 雑務別の出現回数を含む一括保存への更新
+
+既存DBでは `sql/migrations/20261025_task_birth_threshold.sql` → 最新の `sql/functions/save_guild_settings.sql` → Botの更新・再起動の順で適用します。
+RPCの引数は変更していません。旧Botの呼び出しも動作し、新しいBotを古いSQLのまま使った場合は、設定を部分保存せずにエラーにします。
+
 ### 設定保存に必要なSQL（基本テーブル作成済みのDB）
 
 1. Supabaseの対象プロジェクトでSQL Editorを開きます。
@@ -33,9 +38,11 @@
 | 画面 | 保存先 | 内容 |
 | --- | --- | --- |
 | 1枚目 | `guild_settings`、`locations` | 通知先、管理者向けチャンネル、通知時刻、場所の一覧 |
-| 2枚目 | `guild_settings`、`task_types` | 出現に必要な報告回数、雑務の一覧、対応する妖怪キー |
+| 2枚目 | `guild_settings`、`task_types` | 全体と雑務別の出現回数、雑務の一覧、対応する妖怪キー |
 
 1枚の画面の変更は1回のRPCで保存します。その途中で失敗した場合は、その画面の変更をすべて取り消します。
+2枚目は `p_settings.task_birth_thresholds` に「雑務名→1〜10またはnull」のオブジェクトを渡し、全体の出現回数と一覧と同じトランザクションで更新します。
+この項目を渡す場合は雑務一覧も必要で、一覧の全項目に回数かnullを指定します。nullは全体の出現回数を使う意味です。項目自体を省略した呼び出しでは既存の雑務別回数を保持します。
 1枚目の保存後に2枚目をキャンセルした場合、1枚目の変更は保存済みです。
 保存完了の表示は、DBから成功応答を受けた後に出します。
 通信が途切れて結果が分からない場合は、画面を開き直して確認してください。同じ内容の再送で項目は増殖しません。
@@ -71,7 +78,10 @@ await saveBasicSettings(guildId, {
   digestMinute: 30,
 }, ["流し", "会議室"]);
 
-await saveTaskSettings(guildId, 3, ["洗い物", "ごみ出し"]);
+await saveTaskSettings(guildId, 3, ["洗い物", "ごみ出し"], new Map([
+  ["洗い物", 1],
+  ["ごみ出し", null],
+]));
 ```
 
 個別の変更用には`saveGuildSettings()`・`saveLocationNames()`・`saveTaskTypeNames()`も利用できます。
@@ -191,3 +201,6 @@ DB側の保存処理は、SQL Editorで`sql/functions/tests/save_guild_settings_
 いつもの仕事のテストは、妖怪・通知を作らないこと、ポイントの1時間制限、二重送信、種類変更後の再送と既存妖怪の保持を検証し、最後にロールバックします。
 
 通知時刻migrationの適用後は `sql/functions/tests/notification_time_test.sql` で、既定値18:00・部分更新での設定保持・通知時刻の変更・明示的NULLの拒否を検証できます。最後にロールバックするため、テストデータは残りません。
+
+`sql/functions/tests/atomic_task_settings_test.sql` は検証用DBのSQL Editorでpostgresロールとして実行します。
+書き込み失敗を起こすトリガーを一時的に作り、service_roleで雑務別回数を含む保存を検証します。保存途中で失敗した場合に、全体設定・場所・一覧・個別回数・初回サーバー行がすべて戻ることも確認します。最後のROLLBACKでトリガーとテストデータを取り消します。
