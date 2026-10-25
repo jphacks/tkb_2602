@@ -17,7 +17,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { getLocations, getTaskThresholds, getTaskTypes } from "../database/masters.js";
+import { getLocations, getTaskThresholds, getTaskTypes, saveTaskThresholds } from "../database/masters.js";
 import { formatTaskLine, splitTaskLine } from "../logic/task-threshold.js";
 import {
   getGuildSettings,
@@ -298,9 +298,15 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
   }
 
   let before: string[];
+  let thresholdSaved = false;
   try {
     before = (await getTaskTypes(guildId)).map((t) => t.name);
-    await saveTaskSettings(guildId, birthThreshold, names, thresholds);
+    await saveTaskSettings(guildId, birthThreshold, names);
+    // 雑務ごとの出現回数。保存できなくても（データベースの更新前など）、一覧の保存は終わっているので続ける
+    thresholdSaved = await saveTaskThresholds(guildId, thresholds).then(() => true, (error) => {
+      console.error("雑務ごとの出現回数を保存できませんでした:", error);
+      return false;
+    });
     // 新しく足した項目には、その項目のための妖怪を AI で作り始める（待たない。できたら管理者チャンネルに知らせる）
     const added = names.filter((name) => !before.includes(name));
     if (added.length > 0) {
@@ -319,7 +325,7 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
       interaction.message.content,
       "",
       `**妖怪の出現**：${birthThreshold}度目の記録で出現`,
-      ...describeTaskThresholds(thresholds),
+      ...describeTaskThresholds(thresholds, thresholdSaved),
       "",
       "**やり残されていたこと**",
       describeChanges(before, names),
@@ -331,9 +337,10 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
 }
 
 // 雑務ごとに出現回数を変えたものだけを書く
-function describeTaskThresholds(thresholds: Map<string, number | null>) {
+function describeTaskThresholds(thresholds: Map<string, number | null>, saved: boolean) {
   const custom = [...thresholds].filter(([, threshold]) => threshold !== null);
   if (custom.length === 0) return [];
+  if (!saved) return ["（雑務ごとの出現回数は保存できませんでした。データベースの更新が必要です）"];
   return [`**雑務ごとの出現**：${custom.map(([name, threshold]) => `${name}は${threshold}度目`).join("、")}`];
 }
 

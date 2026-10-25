@@ -1,5 +1,4 @@
 import { supabase } from "./client.js";
-import { MIN_TASK_THRESHOLD, MAX_TASK_THRESHOLD } from "../logic/task-threshold.js";
 
 export type GuildSettings = {
   notificationChannelId: string | null; // まとめ通知を送るチャンネル（#毎日報告）
@@ -96,18 +95,13 @@ async function saveConfiguration(
   settings: Partial<GuildSettings>,
   locationNames?: string[],
   taskTypeNames?: string[],
-  taskThresholds?: ReadonlyMap<string, number | null>,
 ): Promise<void> {
   validateGuildId(guildId);
-  const taskNames = taskTypeNames === undefined ? null : normalizeNames(taskTypeNames);
-  const taskSettings = taskThresholds === undefined
-    ? {}
-    : { task_birth_thresholds: normalizeTaskThresholds(taskNames, taskThresholds) };
   const { error } = await supabase.rpc("save_guild_settings", {
     p_guild_id: guildId,
-    p_settings: { ...settingsPatch(settings), ...taskSettings },
+    p_settings: settingsPatch(settings),
     p_location_names: locationNames === undefined ? null : normalizeNames(locationNames),
-    p_task_type_names: taskNames,
+    p_task_type_names: taskTypeNames === undefined ? null : normalizeNames(taskTypeNames),
   });
   if (error) {
     if (error.code === "22023") throw new SettingsValidationError(error.message);
@@ -124,39 +118,8 @@ export async function saveBasicSettings(
   await saveConfiguration(guildId, settings, names);
 }
 
-function normalizeTaskThresholds(
-  names: string[] | null,
-  thresholds: ReadonlyMap<string, number | null>,
-): Record<string, number | null> {
-  if (!names || !(thresholds instanceof Map)) {
-    throw new SettingsValidationError("雑務一覧と名前ごとの出現回数を指定してください。");
-  }
-  const normalized = new Map<string, number | null>();
-  for (const [rawName, threshold] of thresholds) {
-    if (typeof rawName !== "string") throw new SettingsValidationError("雑務名が不正です。");
-    const name = rawName.trim();
-    if (!names.includes(name) || normalized.has(name)) {
-      throw new SettingsValidationError("雑務ごとの出現回数は、一覧の名前と一致させてください。");
-    }
-    if (threshold !== null && (!Number.isInteger(threshold)
-      || threshold < MIN_TASK_THRESHOLD || threshold > MAX_TASK_THRESHOLD)) {
-      throw new SettingsValidationError("雑務ごとの出現回数は、nullまたは1〜10の整数にしてください。");
-    }
-    normalized.set(name, threshold);
-  }
-  if (normalized.size !== names.length) {
-    throw new SettingsValidationError("雑務ごとの出現回数は、一覧の全項目について指定してください。");
-  }
-  return Object.fromEntries(normalized);
-}
-
-export async function saveTaskSettings(
-  guildId: string,
-  birthThreshold: number,
-  names: string[],
-  thresholds?: ReadonlyMap<string, number | null>,
-): Promise<void> {
-  await saveConfiguration(guildId, { birthThreshold }, undefined, names, thresholds);
+export async function saveTaskSettings(guildId: string, birthThreshold: number, names: string[]): Promise<void> {
+  await saveConfiguration(guildId, { birthThreshold }, undefined, names);
 }
 
 // 個別の更新にも対応。省略した設定や一覧は変更しない。

@@ -50,7 +50,7 @@ begin
   end if;
   if exists (
     select 1 from jsonb_object_keys(p_settings) as item(key)
-    where key not in ('notification_channel_id', 'admin_channel_id', 'digest_hour', 'digest_minute', 'birth_threshold', 'task_birth_thresholds')
+    where key not in ('notification_channel_id', 'admin_channel_id', 'digest_hour', 'digest_minute', 'birth_threshold')
   ) then
     raise exception '未対応の設定項目です。' using errcode = '22023';
   end if;
@@ -98,29 +98,6 @@ begin
     from (select distinct btrim(item) as name from unnest(v_names) as items(item)) as normalized;
     if v_kind = 1 then v_locations := v_names; else v_tasks := v_names; end if;
   end loop;
-
-  -- 画面からの保存では、一覧の全項目の回数を同じRPCに含める。
-  -- nullはサーバー全体の回数を使う。キーの省略は、従来どおり回数を変更しない。
-  if p_settings ? 'task_birth_thresholds' then
-    if jsonb_typeof(p_settings -> 'task_birth_thresholds') <> 'object' or v_tasks is null then
-      raise exception '雑務ごとの出現回数には、雑務一覧と名前ごとの設定を指定してください。' using errcode = '22023';
-    end if;
-    if (select count(*) from jsonb_object_keys(p_settings -> 'task_birth_thresholds')) <> cardinality(v_tasks)
-      or exists (
-        select 1 from jsonb_each(p_settings -> 'task_birth_thresholds') as item(name, value)
-        where not (name = any(v_tasks))
-      )
-    then
-      raise exception '雑務ごとの出現回数は、保存する一覧の全項目について指定してください。' using errcode = '22023';
-    end if;
-    if exists (
-      select 1 from jsonb_each(p_settings -> 'task_birth_thresholds') as item(name, value)
-      where value <> 'null'::jsonb
-        and (jsonb_typeof(value) <> 'number' or value::text !~ '^(10|[1-9])$')
-    ) then
-      raise exception '雑務ごとの出現回数は、nullまたは1〜10の整数にしてください。' using errcode = '22023';
-    end if;
-  end if;
 
   insert into public.guild_settings (guild_id) values (p_guild_id)
     on conflict (guild_id) do nothing;
@@ -192,13 +169,6 @@ begin
     end loop;
     update public.task_types set is_active = (name = any(v_tasks))
       where guild_id = p_guild_id and is_active is distinct from (name = any(v_tasks));
-  end if;
-
-  if p_settings ? 'task_birth_thresholds' then
-    update public.task_types as tt
-    set birth_threshold = case when item.value = 'null'::jsonb then null else item.value::text::integer end
-    from jsonb_each(p_settings -> 'task_birth_thresholds') as item(name, value)
-    where tt.guild_id = p_guild_id and tt.name = item.name and tt.is_active;
   end if;
 end;
 $$;
