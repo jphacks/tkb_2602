@@ -148,3 +148,26 @@ export async function markNotificationJobsSent(
     if (error) throw new Error(`通知済み状態の保存に失敗しました: ${error.message}`);
   }
 }
+
+// 研究室の「健全さ」（健全な状態を祝うため）：いま活動中の妖怪の数と、最後に妖怪が生まれた時刻
+export async function getYokaiHealth(guildId: string): Promise<{ activeCount: number; lastBornAt: Date | null }> {
+  const active = await supabase
+    .from("yokai_states")
+    .select("id", { count: "exact", head: true })
+    .eq("guild_id", guildId)
+    .eq("stage", "active");
+  if (active.error) throw new Error(`活動中の妖怪の数を取得できませんでした: ${active.error.message}`);
+
+  const latest = await supabase
+    .from("yokai_states")
+    .select("born_at")
+    .eq("guild_id", guildId)
+    .not("born_at", "is", null)
+    .order("born_at", { ascending: false })
+    .limit(1)
+    .returns<Array<{ born_at: string }>>();
+  if (latest.error) throw new Error(`最後に妖怪が生まれた時刻を取得できませんでした: ${latest.error.message}`);
+
+  const bornAt = latest.data?.[0]?.born_at;
+  return { activeCount: active.count ?? 0, lastBornAt: bornAt ? new Date(bornAt) : null };
+}

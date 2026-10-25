@@ -22,6 +22,19 @@
 
 **目次**：[デモ動画](#デモ動画) ／ [画面で見る使い方](#画面で見る使い方) ／ [なぜ「妖怪」なのか](#なぜ妖怪なのか) ／ [既存手段との違い](#既存手段との違い) ／ [要件定義](#要件定義) ／ [データの流れ](#データの流れ名前が残らない仕組み) ／ [注力したこと](#注力したこと設計思想と判断過程) ／ [効果の確かめ方](#効果の確かめ方) ／ [セットアップ](#セットアップ)
 
+<details>
+<summary><strong>English summary</strong></summary>
+
+**Yokai Dayori** is a Discord bot that turns the "nameless chores" of shared spaces — dishes left in the sink, an overflowing trash bin, lights left on — into *yokai* (Japanese folk spirits) instead of someone's fault. **From blaming people to finding yokai.**
+
+- **Who**: lab members who quietly clean up after everyone, but can't say "who left this?" without making things awkward. A duty roster only turns into a hunt for "who didn't do it."
+- **How**: anyone who tidies something up picks the place and the leftover task from a menu (`/youkai`). Only when the same thing keeps happening does a yokai appear. When it stops happening, the yokai "ascends" and disappears.
+- **No names, by design**: the observation log has no reporter column; Discord IDs are converted with HMAC-SHA256 and never stored; changes are announced once a day so timing can't reveal who observed what.
+- **Beyond reporting**: each yokai comes with a tip to keep it from coming back, an imbalance in who cleans appears as its own yokai ("Katayori-bou") without naming anyone, and the lab is congratulated when no yokai remain.
+- **Why yokai**: in Japan, people have long blamed unexplained troubles on yokai — a way to name a problem without blaming a person. The same idea works with any culture's folk creatures (gremlins, brownies, kobolds), so the metaphor can be localized.
+
+</details>
+
 ## デモ動画
 
 [▶️ 紹介動画を見る（YouTube・約3分）](https://youtu.be/7XldvmdmH-A)
@@ -126,6 +139,8 @@
 <img src="docs/demo/13-ascend.jpg" width="560" alt="妖怪だよりに載った、成仏したゴミため坊と、効いた工夫の共有の呼びかけ">
 
 成仏した妖怪は、`/zukan`（妖怪図鑑）に「成仏した妖怪」として残ります。いまいる妖怪とあわせて、それぞれのお祓いの作法をいつでも見返せるので、次に同じ問題が起きたときの手がかりになります。
+
+成仏して研究室に妖怪がいなくなったときは、妖怪だよりの最後で「🌸 いま、研究室に妖怪はいません。みんなで、健全な状態を取り戻しました。」と祝います。新しい妖怪が生まれない1週間が続いたときも、週に1回（月曜の定時通知）「静かな1週間」として祝い、良い状態を保つ励みにします。
 
 ## 解決したいこと
 
@@ -399,7 +414,7 @@ npm run typecheck
 npm test
 ```
 
-自動テストは 105 件あり、Discord や Supabase、Cloudflare には実際につながずに、通信の部分を差しかえて確かめています。
+自動テストは 110 件あり、Discord や Supabase、Cloudflare には実際につながずに、通信の部分を差しかえて確かめています。
 
 主な実装箇所：
 
@@ -426,6 +441,7 @@ npm test
 | 1回目から問題を全体公開する | 不採用 | 偶発的な1回まで問題視し、報告者の推測にもつながるため。`presence`と`shadow`は本人だけに返す |
 | 新しい項目に、使っていない妖怪を機械的に割り当てる | 変更 | 「紙詰まり」に「もどらずピペット」が付くなど、意味の合わない妖怪が出たため。新しく追加した項目だけ、項目の名前を渡して生成AIで妖怪を作る |
 | 一覧にないやり残しは、追加後に報告し直してもらう | 変更 | ふつうより1回多く記録しないと妖怪が出ないため。管理者が追加した時点で、元の観測を1回目として数える |
+| 片づけの偏りを、時間帯や曜日ごとにも見せる | 不採用 | 「毎朝8時に片づけている人」のように、時間で区切ると誰のことか分かってしまうため。偏りは研究室全体で1つの段階だけを出す |
 
 ### 2. 「人」ではなく「繰り返す問題」を妖怪にした
 
