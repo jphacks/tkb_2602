@@ -28,9 +28,9 @@ test("片づけない人も人数に入れる（2人だけが半分ずつでも�
   assert.equal(bias.biasStage([10, 10, 1], 10), "active");
 });
 
-test("片づけた人が3人未満、または合計が10未満なら出さない（誰のことか分かってしまうため）", () => {
+test("片づけた人が3人未満、または合計が6未満なら出さない（誰のことか分かってしまうため）", () => {
   assert.equal(bias.biasStage([20, 20], 10), "unknown");
-  assert.equal(bias.biasStage([3, 2, 2], 10), "unknown");
+  assert.equal(bias.biasStage([2, 2, 1], 10), "unknown");
 });
 
 test("妖怪だよりには段階だけを出し、人数や割合は出さない", () => {
@@ -48,4 +48,27 @@ test("自分が担った割合は、10%きざみで本人にだけ", () => {
   assert.equal(bias.myShareText(3, 10), "この研究室の片づけのうち、あなたが担ったのは約30%です");
   assert.equal(bias.myShareText(1, 100), "この研究室の片づけのうち、あなたが担ったのは1割未満です");
   assert.equal(bias.myShareText(0, 10), null);
+});
+
+test("かたより坊は、直近の片づけ（最後にポイントが付いた時刻が since 以降）だけを、人ごとの数にして使う", async () => {
+  const originalFetch = globalThis.fetch;
+  let query;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(new Request(input, init).url);
+    query = url.searchParams;
+    assert.equal(url.pathname.split("/").at(-1), "guardian_cooldowns");
+    return new Response(JSON.stringify([
+      { member_key: "a" }, { member_key: "a" }, { member_key: "a" }, { member_key: "b" }, { member_key: "c" },
+    ]), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const guardians = await import(pathToFileURL(resolve("src/database/guardians.ts")).href);
+    const since = new Date("2030-01-01T00:00:00Z");
+    const counts = await guardians.getRecentCleaningCounts("guild-1", since);
+    assert.deepEqual(counts.sort(), [1, 1, 3]);
+    assert.equal(query.get("last_awarded_at"), `gte.${since.toISOString()}`);
+    assert.equal(query.get("select"), "member_key");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

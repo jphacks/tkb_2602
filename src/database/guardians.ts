@@ -75,3 +75,20 @@ export async function getGuildPoints(guildId: string): Promise<number[]> {
   if (error) throw new Error(`守り神ポイントの取得に失敗しました: ${error.message}`);
   return (data ?? []).map((row) => row.points);
 }
+
+// 直近の片づけ（かたより坊の判定用）：since 以降に守り神ポイントが付いた「場所 × やり残したこと」の数を、人ごとに返す。
+// guardian_cooldowns（人 × 場所 × やり残したこと ごとの、最後にポイントが付いた時刻）を使うので、データベースの形は変えない。
+// 誰の数かは返さない（数だけ）
+export async function getRecentCleaningCounts(guildId: string, since: Date): Promise<number[]> {
+  const { data, error } = await supabase
+    .from("guardian_cooldowns")
+    .select("member_key")
+    .eq("guild_id", guildId)
+    .gte("last_awarded_at", since.toISOString())
+    .limit(10000)
+    .returns<Array<{ member_key: string }>>();
+  if (error) throw new Error(`直近の片づけの取得に失敗しました: ${error.message}`);
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) counts.set(row.member_key, (counts.get(row.member_key) ?? 0) + 1);
+  return [...counts.values()];
+}

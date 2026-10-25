@@ -2,6 +2,9 @@
 // 「片づけるのは、いつも同じ人」という偏りそのものを、人ではなく妖怪として研究室に見せる。
 // 誰が片づけたかは出さない。段階だけを出し、人数や割合は出さない。
 //
+// 判定に使うのは「直近 BIAS_WINDOW_DAYS 日に、それぞれの人が片づけた 場所 × やり残したこと の数」。
+// 昔の偏りをいつまでも引きずらず、今の分担の様子を見るため。
+//
 // 偏り度 ＝ いちばん多く片づけた1人の割合 ÷（1 ÷ 研究室の人数）
 //   ＝ みんなで同じだけ片づけたときの、何倍を1人が担っているか
 // 例：9人の研究室で1人が 1/3 を担っていれば、偏り度は3（かたより坊が出現）
@@ -11,7 +14,8 @@ export type BiasStage = "healthy" | "presence" | "active" | "unknown";
 export const BIAS_PRESENCE_RATIO = 2; // これ以上で「気配」
 export const BIAS_ACTIVE_RATIO = 3; // これ以上で「出現」
 export const MIN_CONTRIBUTORS = 3; // 片づけた人がこれより少ないと、誰のことか分かってしまうので出さない
-export const MIN_TOTAL_POINTS = 10; // 片づけの合計がこれより少ないと、たまたまの偏りなので出さない
+export const MIN_TOTAL_POINTS = 6; // 直近の片づけの合計がこれより少ないと、たまたまの偏りなので出さない
+export const BIAS_WINDOW_DAYS = 14; // 直近何日の片づけで判定するか
 
 // points：研究室のメンバーそれぞれの守り神ポイント（片づけの回数）。memberCount：研究室（サーバー）の人数
 export function biasStage(points: number[], memberCount: number): BiasStage {
