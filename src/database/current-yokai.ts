@@ -26,6 +26,30 @@ type YokaiStateRow = {
   taskType: { name: string } | null;
 };
 
+// 誕生がまだ「妖怪だより」で知らされていない妖怪のID。
+// こうした妖怪は、次の妖怪だよりまで /now や /zukan に出さない。
+// すぐ出すと、見た人に「さっき誰かが観測した」と分かってしまうため。
+export async function getUnannouncedBirthIds(guildId: string): Promise<Set<string>> {
+  const pageSize = 500;
+  const unannounced = new Set<string>();
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("notification_jobs")
+      .select("id, yokai_id")
+      .eq("guild_id", guildId)
+      .eq("event_type", "birth")
+      .is("sent_at", null)
+      .order("id")
+      .range(offset, offset + pageSize - 1)
+      .returns<Array<{ id: string; yokai_id: string | null }>>();
+    if (error) throw new Error(`未送信の誕生通知の取得に失敗しました: ${error.message}`);
+    if (!data) throw new Error("未送信の誕生通知の取得結果がありません");
+    if (data.length === 0) break;
+    for (const job of data) if (job.yokai_id) unannounced.add(job.yokai_id);
+  }
+  return unannounced;
+}
+
 export async function getCurrentActiveYokai(
   guildId: string,
 ): Promise<CurrentActiveYokai[]> {
@@ -68,25 +92,7 @@ export async function getCurrentActiveYokai(
     rows.push(...data);
   }
 
-  // 誕生がまだ「妖怪だより」で知らされていない妖怪は、次の妖怪だよりまで出さない。
-  // すぐ出すと、/now を見た人に「さっき誰かが観測した」と分かってしまうため。
-  const unannounced = new Set<string>();
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
-      .from("notification_jobs")
-      .select("id, yokai_id")
-      .eq("guild_id", guildId)
-      .eq("event_type", "birth")
-      .is("sent_at", null)
-      .order("id")
-      .range(offset, offset + pageSize - 1)
-      .returns<Array<{ id: string; yokai_id: string | null }>>();
-    if (error) throw new Error(`未送信の誕生通知の取得に失敗しました: ${error.message}`);
-    if (!data) throw new Error("未送信の誕生通知の取得結果がありません");
-    if (data.length === 0) break;
-    for (const job of data) if (job.yokai_id) unannounced.add(job.yokai_id);
-  }
-
+  const unannounced = await getUnannouncedBirthIds(guildId);
   const taskThresholds = await getTaskThresholds(guildId);
 
   return rows.filter((row) => !unannounced.has(row.id)).map((row) => {
