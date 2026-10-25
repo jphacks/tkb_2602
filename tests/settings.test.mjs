@@ -97,6 +97,32 @@ await test("設定保存と設定画面", async (t) => {
     }]);
   });
 
+  await t.test("雑務別の出現回数と全体の設定・一覧を同じRPCへ渡す", async () => {
+    reset();
+    await settings.saveTaskSettings(guildId, 5, [" 洗い物 ", "ごみ出し"], new Map([
+      [" 洗い物 ", 1], ["ごみ出し", null],
+    ]));
+    assert.deepEqual(rpcCalls, [{
+      p_guild_id: guildId,
+      p_settings: { birth_threshold: 5, task_birth_thresholds: { 洗い物: 1, ごみ出し: null } },
+      p_location_names: null, p_task_type_names: ["洗い物", "ごみ出し"],
+    }]);
+  });
+
+  await t.test("雑務別の出現回数が不正・一覧と不一致ならRPCを送らない", async () => {
+    reset();
+    for (const thresholds of [
+      new Map(), new Map([["別の雑務", 1]]), new Map([["洗い物", 0]]),
+      new Map([["洗い物", 11]]), new Map([["洗い物", 1.5]]),
+      new Map([["洗い物", "1"]]), new Map([["洗い物", undefined]]),
+      new Map([["洗い物", 1], [" 洗い物 ", 2]]),
+    ]) {
+      await assert.rejects(settings.saveTaskSettings(guildId, 5, ["洗い物"], thresholds),
+        settings.SettingsValidationError);
+    }
+    assert.equal(rpcCalls.length, 0);
+  });
+
   await t.test("個別更新も利用でき、未指定と明示的なnullを区別する", async () => {
     reset();
     await settings.saveGuildSettings(guildId, { notificationChannelId: null, adminChannelId: undefined });
@@ -206,12 +232,16 @@ await test("設定保存と設定画面", async (t) => {
 
   await t.test("2枚目もまとめて保存し、成功した場合だけ完了する", async () => {
     reset();
-    const interaction = modal("youkai-settei:tasks", { text: "洗い物\nごみ出し" });
+    const interaction = modal("youkai-settei:tasks", { text: "洗い物=1\nごみ出し" });
     rpcCheck = () => assert.equal(interaction.events[0][0], "deferUpdate");
     await youkaiSettei.handleModal(interaction);
     assert.equal(rpcCalls.length, 1);
     assert.deepEqual(rpcCalls[0].p_task_type_names, ["洗い物", "ごみ出し"]);
+    assert.deepEqual(rpcCalls[0].p_settings, {
+      birth_threshold: 5, task_birth_thresholds: { 洗い物: 1, ごみ出し: null },
+    });
     assert.match(interaction.events.at(-1)[1].content, /一覧を保存しました（2\/2）/);
+    assert.match(interaction.events.at(-1)[1].content, /洗い物は1度目/);
     assert.deepEqual(interaction.events.at(-1)[1].components, []);
 
     reset();
@@ -221,6 +251,19 @@ await test("設定保存と設定画面", async (t) => {
     assert.equal(failed.events.at(-1)[0], "followUp");
     assert.match(failed.events.at(-1)[1].content, /割り当てられる妖怪がありません/);
     assert.equal(failed.events.some(([name]) => name === "editReply"), false);
+    assert.equal(rpcCalls.length, 1);
+  });
+
+  await t.test("古いSQLが雑務別設定を拒否したら、別保存を試さず失敗を表示する", async () => {
+    reset();
+    failure = { code: "22023", message: "未対応の設定項目です。" };
+    const interaction = modal("youkai-settei:tasks", { text: "洗い物=1" });
+    await youkaiSettei.handleModal(interaction);
+    assert.equal(rpcCalls.length, 1);
+    assert.deepEqual(rpcCalls[0].p_settings.task_birth_thresholds, { 洗い物: 1 });
+    assert.equal(interaction.events.at(-1)[0], "followUp");
+    assert.match(interaction.events.at(-1)[1].content, /保存できませんでした/);
+    assert.equal(interaction.events.some(([name]) => name === "editReply"), false);
   });
 
   await t.test("設定画面を再度開くと、DBから読んだ時刻・出現条件が選択済みになる", async () => {
