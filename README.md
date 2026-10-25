@@ -257,6 +257,7 @@ presence（気配） → shadow（影） → active（出現・成長） → asc
 | 7 | AI が使えなくても、止まらない | 無料の範囲を超えたり、通信が切れたりしても使い続けられるようにするため | AI の失敗は、決まった名前と妖怪に置きかえて続ける | [tests/custom-yokai.test.mjs](tests/custom-yokai.test.mjs) |
 | 8 | 一般のメンバーに、管理の機能を見せない | 設定やデモ用の操作を、誰でも触れると困るため | 管理用のコマンドは、サーバー管理の権限がある人にだけ表示し、コマンドの中でも確かめる | [tests/demo-guardian.test.mjs](tests/demo-guardian.test.mjs)（管理者でなければ増やさない） |
 | 9 | 新しいアプリを入れずに使える | 使い始めるまでの手間を、なくすため | すべて Discord の中で完結。管理者がコマンドを1つ打つだけで、チャンネルと初期の一覧がそろう | [youkai-junbi.ts](src/commands/youkai-junbi.ts) |
+| 10 | 片づけの偏りを見せても、誰のことか分からないようにする | 偏りを見せると、片づけている人が誰か想像できてしまうため | 偏りは研究室全体で1つの段階だけを出し、人数や割合は出さない。片づけた人が3人未満のときは出さない。自分の割合は本人にだけ見せる | [tests/bias.test.mjs](tests/bias.test.mjs) |
 
 ## データの流れ：名前が残らない仕組み
 
@@ -368,7 +369,7 @@ npm run typecheck
 npm test
 ```
 
-自動テストは 87 件あり、Discord や Supabase、Cloudflare には実際につながずに、通信の部分を差しかえて確かめています。
+自動テストは 98 件あり、Discord や Supabase、Cloudflare には実際につながずに、通信の部分を差しかえて確かめています。
 
 主な実装箇所：
 
