@@ -27,6 +27,8 @@ declare
   v_duplicate boolean;
   v_level integer;
   v_task_name text;
+  -- 雑務ごとの出現回数（20261025_task_birth_threshold.sql）。null ならサーバー全体の値を使う
+  v_task_threshold integer;
   -- 管理者が追加した項目のために、AIで作った妖怪（20261024_custom_yokai.sql）。なければ null
   v_custom_name text;
   v_custom_image text;
@@ -70,8 +72,8 @@ begin
   end if;
 
   -- 雑務がこのサーバーの有効な選択肢か確認
-  select name, yokai_key, custom_yokai_name, custom_image_key
-    into v_task_name, v_yokai_key, v_custom_name, v_custom_image
+  select name, yokai_key, custom_yokai_name, custom_image_key, birth_threshold
+    into v_task_name, v_yokai_key, v_custom_name, v_custom_image, v_task_threshold
   from public.task_types
   where id = p_task_type_id
     and guild_id = p_guild_id
@@ -80,6 +82,9 @@ begin
   if not found then
     raise exception '雑務が存在しないか、無効になっています';
   end if;
+
+  -- この雑務だけの出現回数があれば、それを使う
+  v_threshold := coalesce(v_task_threshold, v_threshold);
 
   -- 同じrequest_idは一度しか保存しない
   insert into public.reports (
