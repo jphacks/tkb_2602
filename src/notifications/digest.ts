@@ -9,6 +9,7 @@ import {
   type PendingNotificationJob,
 } from "../database/notification-jobs.js";
 import { getNow } from "../time.js";
+import { ASCEND_HINT, oharaiAdvice } from "../logic/oharai.js";
 import { displayYokaiName } from "./yokai-catalog.js";
 
 const POLL_INTERVAL_MS = 60_000;
@@ -26,7 +27,7 @@ const EVENT_LABELS: Record<string, string> = {
 
 export type NotificationMessage = {
   content: string;
-  embeds?: Array<{ title: string; image?: { url: string } }>;
+  embeds?: Array<{ title: string; description?: string; image?: { url: string } }>;
   files?: Array<{ attachment: string; name: string }>;
 };
 
@@ -99,7 +100,11 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[]): string
           (type === "birth" || type === "ascend") &&
           job.yokaiId
         )
-        .map((job) => `  - **${displayYokaiName(job.yokaiName, job.imageKey)}**`),
+        .flatMap((job) => [
+          `  - **${displayYokaiName(job.yokaiName, job.imageKey)}**`,
+          // 生まれた妖怪には、どうすれば残らなくなるか（お祓いの作法）を添える
+          ...(type === "birth" ? [`    - お祓いの作法：${oharaiAdvice(job.taskName)}`] : []),
+        ]),
     ]),
   ].join("\n");
 }
@@ -120,11 +125,14 @@ export function buildNotificationDigestMessages(
       const name = displayYokaiName(job.yokaiName, job.imageKey);
       const title = `${EVENT_LABELS[job.eventType] ?? job.eventType}：${name}`;
       const path = imagePath(job.imageKey, job.eventType);
-      if (!path || !job.imageKey) return { title };
+      const description = job.eventType === "birth"
+        ? `お祓いの作法：${oharaiAdvice(job.taskName)}\n-# ${ASCEND_HINT}`
+        : undefined;
+      if (!path || !job.imageKey) return { title, ...(description ? { description } : {}) };
 
       const attachmentName = `${job.id.replace(/[^a-zA-Z0-9_-]/g, "_")}-${job.imageKey}`;
       files.push({ attachment: path, name: attachmentName });
-      return { title, image: { url: `attachment://${attachmentName}` } };
+      return { title, ...(description ? { description } : {}), image: { url: `attachment://${attachmentName}` } };
     });
     messages.push({
       content: from === 0

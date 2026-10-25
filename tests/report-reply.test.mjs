@@ -60,7 +60,7 @@ test("AIで作った妖怪など、紹介文がない妖怪でも誕生のカー
     context,
     { yokaiName: "かみため坊", imageKey: "custom_00000000-0000-0000-0000-000000000000.png" },
   );
-  assert.equal(frames[2].embeds[0].description, "流しの「洗い物」に住みついた妖怪です。（Lv.1）");
+  assert.match(frames[2].embeds[0].description, /^流しの「洗い物」に住みついた妖怪です。（Lv\.1）\n\n\*\*お祓いの作法\*\*/);
 });
 
 test("紹介文は10体ぶんそろっていて、報告者を責める言葉を使わない", () => {
