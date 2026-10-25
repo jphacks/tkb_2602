@@ -17,7 +17,8 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { getLocations, getTaskTypes } from "../database/masters.js";
+import { getLocations, getTaskThresholds, getTaskTypes, saveTaskThresholds } from "../database/masters.js";
+import { formatTaskLine, splitTaskLine } from "../logic/task-threshold.js";
 import {
   getGuildSettings,
   saveBasicSettings,
@@ -43,6 +44,17 @@ function parseList(text: string) {
   const tooLong = names.filter((name) => name.length > MAX_NAME_LENGTH);
   if (tooLong.length > 0) errors.push(`${MAX_NAME_LENGTH}文字までにしてください：${tooLong.join("、")}`);
   return { names, errors };
+}
+
+// やり残されていたことの一覧：「器具の洗浄=1」のように書いた行は、その雑務だけ出現回数を変える
+function parseTaskList(text: string) {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map(splitTaskLine);
+  const { names, errors } = parseList(lines.map((line) => line.name).join("\n"));
+  errors.push(...lines.flatMap((line) => (line.error ? [line.error] : [])));
+  // 名前 → 回数（書いていない名前は null にして、全体の値に戻す）
+  const thresholds = new Map<string, number | null>(names.map((name) => [name, null]));
+  for (const line of lines) if (line.threshold !== null) thresholds.set(line.name, line.threshold);
+  return { names, thresholds, errors };
 }
 
 // 今の一覧と比べて、何が増えて何が使われなくなるかを文章にする
@@ -183,7 +195,11 @@ export const youkaiSettei: Command = {
     if (interaction.customId !== "youkai-settei:open-tasks") return;
     if (await rejectIfNotAdmin(interaction)) return;
     const guildId = interaction.guildId!;
-    const [settings, taskTypes] = await Promise.all([getGuildSettings(guildId), getTaskTypes(guildId)]);
+    const [settings, taskTypes, taskThresholds] = await Promise.all([
+      getGuildSettings(guildId),
+      getTaskTypes(guildId),
+      getTaskThresholds(guildId),
+    ]);
 
     const modal = new ModalBuilder()
       .setCustomId("youkai-settei:tasks")
@@ -201,9 +217,13 @@ export const youkaiSettei: Command = {
           .setLabel("やり残されていたことの一覧（1行に1つ）")
           // 妖怪は「普段あってはいけない状態」だけ。ゴミの回収のような周期的な仕事を入れると、
           // こなすたびに観測が増え、健全な研究室でも妖怪が出てしまうため
-          .setDescription("普段あってはいけない状態だけを入れてください。ゴミの回収など、決まった周期の仕事は入れません")
+          .setDescription("普段あってはいけない状態だけ（周期的な仕事は入れない）。「器具の洗浄=1」と書くと、その雑務だけ1度目で出現")
           .setTextInputComponent(
-            listInput("youkai-settei:task-list", taskTypes.map((t) => t.name), "洗い物が残っていた\nゴミがあふれていた\n備品が切れていた"),
+            listInput(
+              "youkai-settei:task-list",
+              taskTypes.map((t) => formatTaskLine(t.name, taskThresholds.get(t.id))),
+              "洗い物が残っていた\n器具の洗浄=1\n備品が切れていた",
+            ),
           ),
       );
 
@@ -268,7 +288,7 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
   const guildId = interaction.guildId!;
 
   const birthThreshold = Number(interaction.fields.getStringSelectValues("youkai-settei:threshold")[0]);
-  const { names, errors } = parseList(interaction.fields.getTextInputValue("youkai-settei:task-list"));
+  const { names, thresholds, errors } = parseTaskList(interaction.fields.getTextInputValue("youkai-settei:task-list"));
   if (errors.length > 0) {
     await interaction.followUp({
       content: `やり残されていたことの一覧を直してください：\n・${errors.join("\n・")}\nもう一度「次へ」を押してください。`,
@@ -278,9 +298,15 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
   }
 
   let before: string[];
+  let thresholdSaved = false;
   try {
     before = (await getTaskTypes(guildId)).map((t) => t.name);
     await saveTaskSettings(guildId, birthThreshold, names);
+    // 雑務ごとの出現回数。保存できなくても（データベースの更新前など）、一覧の保存は終わっているので続ける
+    thresholdSaved = await saveTaskThresholds(guildId, thresholds).then(() => true, (error) => {
+      console.error("雑務ごとの出現回数を保存できませんでした:", error);
+      return false;
+    });
     // 新しく足した項目には、その項目のための妖怪を AI で作り始める（待たない。できたら管理者チャンネルに知らせる）
     const added = names.filter((name) => !before.includes(name));
     if (added.length > 0) {
@@ -299,6 +325,7 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
       interaction.message.content,
       "",
       `**妖怪の出現**：${birthThreshold}度目の記録で出現`,
+      ...describeTaskThresholds(thresholds, thresholdSaved),
       "",
       "**やり残されていたこと**",
       describeChanges(before, names),
@@ -307,6 +334,14 @@ async function saveTasks(interaction: ModalSubmitInteraction) {
     ].join("\n"),
     components: [],
   });
+}
+
+// 雑務ごとに出現回数を変えたものだけを書く
+function describeTaskThresholds(thresholds: Map<string, number | null>, saved: boolean) {
+  const custom = [...thresholds].filter(([, threshold]) => threshold !== null);
+  if (custom.length === 0) return [];
+  if (!saved) return ["（雑務ごとの出現回数は保存できませんでした。データベースの更新が必要です）"];
+  return [`**雑務ごとの出現**：${custom.map(([name, threshold]) => `${name}は${threshold}度目`).join("、")}`];
 }
 
 function settingsErrorMessage(error: unknown): string {

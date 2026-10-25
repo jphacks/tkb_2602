@@ -1,4 +1,5 @@
 import { supabase } from "./client.js";
+import { getTaskThresholds } from "./masters.js";
 import { displayYokaiName } from "../notifications/yokai-catalog.js";
 
 export type CurrentActiveYokai = {
@@ -17,6 +18,7 @@ type GuildSettingsRow = {
 type YokaiStateRow = {
   id: string;
   location_id: string;
+  task_type_id: string;
   report_count: number;
   yokai_name: string | null;
   image_key: string | null;
@@ -50,7 +52,7 @@ export async function getCurrentActiveYokai(
     const { data, error } = await supabase
       .from("yokai_states")
       .select(`
-        id, location_id, report_count, yokai_name, image_key,
+        id, location_id, task_type_id, report_count, yokai_name, image_key,
         location:locations(name),
         taskType:task_types(name)
       `)
@@ -85,6 +87,8 @@ export async function getCurrentActiveYokai(
     for (const job of data) if (job.yokai_id) unannounced.add(job.yokai_id);
   }
 
+  const taskThresholds = await getTaskThresholds(guildId);
+
   return rows.filter((row) => !unannounced.has(row.id)).map((row) => {
     if (!row.location || !row.taskType) {
       throw new Error("妖怪に対応する場所・やり残しの種類を取得できませんでした");
@@ -95,7 +99,8 @@ export async function getCurrentActiveYokai(
       locationName: row.location.name,
       taskTypeName: row.taskType.name,
       yokaiName: displayYokaiName(row.yokai_name, row.image_key),
-      level: Math.max(1, row.report_count - settings.birth_threshold + 1),
+      // 雑務ごとの出現回数があれば、それでレベルを数える
+      level: Math.max(1, row.report_count - (taskThresholds.get(row.task_type_id) ?? settings.birth_threshold) + 1),
     };
   });
 }

@@ -19,6 +19,7 @@ await test("/nowの現在妖怪一覧", async (t) => {
   const originalFetch = globalThis.fetch;
   let states = [];
   let pendingBirths = [];
+  let taskThresholds = [];
   const requests = [];
 
   t.after(() => {
@@ -41,6 +42,10 @@ await test("/nowの現在妖怪一覧", async (t) => {
 
     assert.equal(request.method, "GET");
     if (table === "guild_settings") return respond({ birth_threshold: 3 });
+    if (table === "task_types") {
+      assert.equal(url.searchParams.get("select"), "id,birth_threshold");
+      return respond(taskThresholds);
+    }
     if (table === "notification_jobs") {
       assert.equal(url.searchParams.get("event_type"), "eq.birth");
       assert.equal(url.searchParams.get("sent_at"), "is.null");
@@ -123,6 +128,20 @@ await test("/nowの現在妖怪一覧", async (t) => {
     await now.execute(onlyNew);
     assert.equal(onlyNew.calls[1].args[0], "現在活動中の妖怪はいません。");
     pendingBirths = [];
+  });
+
+  await t.test("雑務ごとの出現回数があれば、それでレベルを数える", async () => {
+    states = [{
+      id: "yokai-9", location_id: "location-9", task_type_id: "task-9", report_count: 3,
+      yokai_name: "器具の妖怪", image_key: "yokai_Y01_lv1.png",
+      location: { name: "実験台" }, taskType: { name: "器具の洗浄" },
+    }];
+    taskThresholds = [{ id: "task-9", birth_threshold: 1 }];
+    const target = interaction();
+    await now.execute(target);
+    // 全体の値（3度目）ならレベル1だが、この雑務は1度目で出現なのでレベル3
+    assert.match(target.calls[1].args[0], /レベル 3/);
+    taskThresholds = [];
   });
 
   await t.test("activeの妖怪がいない場合も公開で案内する", async () => {
