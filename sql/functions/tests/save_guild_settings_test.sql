@@ -6,6 +6,8 @@ declare
   v_guild text := 'settings-test-' || gen_random_uuid()::text;
   v_other text := 'settings-other-' || gen_random_uuid()::text;
   v_failed text := 'settings-failed-' || gen_random_uuid()::text;
+  v_mapping text;
+  v_case record;
   v_location uuid;
   v_task uuid;
   v_key text;
@@ -13,6 +15,80 @@ declare
   v_i integer;
   v_names text[];
 begin
+  -- 指定語は名前の途中にあっても対応する番号になる。各ケースは別サーバーで検証する。
+  for v_case in
+    select * from (values
+      ('器具の洗い忘れ', 'Y01'),
+      ('ゴミが残っていた', 'Y02'), ('ごみが残っていた', 'Y02'),
+      ('器具を出しっぱなし', 'Y03'), ('器具を置きっぱなし', 'Y03'),
+      ('机が散らかっていた', 'Y04'),
+      ('器具の返却忘れ', 'Y05'), ('器具を戻し忘れた', 'Y05'),
+      ('電気の消し忘れ', 'Y06'), ('照明の消し忘れ', 'Y06'),
+      ('空調の消し忘れ', 'Y07'), ('エアコンの消し忘れ', 'Y07'),
+      ('冷蔵庫の閉め忘れ', 'Y08'), ('冷凍庫の閉め忘れ', 'Y08'),
+      ('床の掃除忘れ', 'Y09'), ('棚にほこりがあった', 'Y09'),
+      ('消耗品の補充忘れ', 'Y10'), ('消耗品が切れていた', 'Y10'), ('備品が足りない', 'Y10')
+    ) as cases(name, expected_key)
+  loop
+    v_mapping := 'settings-mapping-' || gen_random_uuid()::text;
+    perform public.save_guild_settings(v_mapping, '{}', null, array[v_case.name]);
+    select yokai_key into strict v_key from public.task_types
+      where guild_id = v_mapping and name = v_case.name;
+    if v_key <> v_case.expected_key then
+      raise exception '名前からの割当に失敗: %（期待: %、実際: %）', v_case.name, v_case.expected_key, v_key;
+    end if;
+  end loop;
+
+  -- 入力順・名前の並び順がY番号と違っていても、空いている希望番号を使う。
+  v_mapping := 'settings-batch-' || gen_random_uuid()::text;
+  perform public.save_guild_settings(v_mapping, '{}', null,
+    array['備品が切れていた', '電気の消し忘れ', '洗い忘れ', 'ゴミ', '出しっぱなし',
+      '机', '返却忘れ', '空調', '冷蔵庫', '掃除忘れ']);
+  select count(*) into v_count from public.task_types
+  where guild_id = v_mapping and (
+    (name = '洗い忘れ' and yokai_key = 'Y01') or (name = 'ゴミ' and yokai_key = 'Y02') or
+    (name = '出しっぱなし' and yokai_key = 'Y03') or (name = '机' and yokai_key = 'Y04') or
+    (name = '返却忘れ' and yokai_key = 'Y05') or (name = '電気の消し忘れ' and yokai_key = 'Y06') or
+    (name = '空調' and yokai_key = 'Y07') or (name = '冷蔵庫' and yokai_key = 'Y08') or
+    (name = '掃除忘れ' and yokai_key = 'Y09') or (name = '備品が切れていた' and yokai_key = 'Y10')
+  );
+  if v_count <> 10 then raise exception '一括追加で名前に対応する番号が割り当たらなかった'; end if;
+
+  -- 使用済みなら無効な雑務も避けて、最小の空き番号へフォールバックする。
+  v_mapping := 'settings-fallback-' || gen_random_uuid()::text;
+  perform public.save_guild_settings(v_mapping, '{}', null, array['電気の消し忘れ']);
+  insert into public.task_types (guild_id, name, yokai_key, is_active)
+    values (v_mapping, '以前の項目', 'Y01', false);
+  perform public.save_guild_settings(v_mapping, '{}', null, array['照明の消し忘れ']);
+  if not exists (select 1 from public.task_types
+    where guild_id = v_mapping and name = '照明の消し忘れ' and yokai_key = 'Y02')
+  then raise exception '使用済み番号から最小の空き番号への割当に失敗'; end if;
+  perform public.save_guild_settings(v_mapping, '{}', null, array['窓の閉め忘れ']);
+  if not exists (select 1 from public.task_types
+    where guild_id = v_mapping and name = '窓の閉め忘れ' and yokai_key = 'Y03')
+  then raise exception '該当語なしの最小の空き番号への割当に失敗'; end if;
+
+  -- 一致語が複数なら指定順で選び、その番号が使用済みなら別の一致語ではなく空き順にする。
+  v_mapping := 'settings-priority-' || gen_random_uuid()::text;
+  perform public.save_guild_settings(v_mapping, '{}', null, array['備品の洗い忘れ']);
+  perform public.save_guild_settings(v_mapping, '{}', null, array['机の洗い忘れ']);
+  if not exists (select 1 from public.task_types
+    where guild_id = v_mapping and name = '備品の洗い忘れ' and yokai_key = 'Y01')
+    or not exists (select 1 from public.task_types
+    where guild_id = v_mapping and name = '机の洗い忘れ' and yokai_key = 'Y02')
+  then raise exception '複数の一致語の優先順かフォールバックが不正'; end if;
+
+  -- 過去に名前と異なる番号が付いた雑務も、再保存・再有効化で変更しない。
+  v_mapping := 'settings-existing-' || gen_random_uuid()::text;
+  insert into public.guild_settings (guild_id) values (v_mapping);
+  insert into public.task_types (guild_id, name, yokai_key, is_active)
+    values (v_mapping, '備品が切れていた', 'Y04', false) returning id into v_task;
+  perform public.save_guild_settings(v_mapping, '{}', null, array['備品が切れていた']);
+  perform public.save_guild_settings(v_mapping, '{}', null, array['備品が切れていた']);
+  if not exists (select 1 from public.task_types
+    where id = v_task and yokai_key = 'Y04' and is_active)
+  then raise exception '既存の雑務のIDか妖怪キーが変更された'; end if;
+
   -- 初回保存はサーバー行から作成する。空白・重複も正規化する。
   perform public.save_guild_settings(v_guild,
     '{"notification_channel_id":"111111111111111111","admin_channel_id":"222222222222222222","digest_hour":19,"digest_minute":30}'::jsonb,
@@ -114,5 +190,5 @@ begin
 end;
 $test$;
 
-select 'テスト成功：初回・部分更新・無効化・再有効化・サーバー分離・割当・ロールバック・権限を確認' as result;
+select 'テスト成功：名前別割当・空き順・既存キー保持・初回・部分更新・無効化・再有効化・サーバー分離・ロールバック・権限を確認' as result;
 rollback;
