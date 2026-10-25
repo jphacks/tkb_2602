@@ -31,7 +31,9 @@ const REPORT_CHANNEL_NAME = "お祓い係の控え室";
 const NOTIFY_CHANNEL_NAME = "毎日報告";
 const ADMIN_CHANNEL_NAME = "管理者";
 const DEFAULT_LOCATIONS = ["流し", "冷蔵庫", "ゴミ箱", "共用机", "実験台"];
-const DEFAULT_TASK_TYPES = ["洗い物", "ゴミ出し", "出しっぱなし", "備品の補充", "電気の消し忘れ"];
+// 「普段あってはいけない状態」の言葉にする（周期的な仕事そのものは妖怪にしない）
+// 順番で妖怪（Y01〜）が割り当たるので、並びは変えない
+const DEFAULT_TASK_TYPES = ["洗い物が残っていた", "ゴミがあふれていた", "出しっぱなし", "備品が切れていた", "電気の消し忘れ"];
 
 export function setupButtonRow() {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
