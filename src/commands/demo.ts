@@ -11,7 +11,11 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { getTimeOffsetSeconds, resetDemoData, setTimeOffsetSeconds } from "../database/demo.js";
+import { addGuardianPoints } from "../database/guardians.js";
+import { createReportSession } from "../database/report-session.js";
 import { getGuildSettings } from "../database/settings.js";
+import { didGuardianEvolve } from "../logic/guardian.js";
+import { guardianCard, guardianChoiceMessage } from "../notifications/guardian-card.js";
 import { deliverPendingNotifications, NotificationDeliveryInProgressError } from "../notifications/digest.js";
 import type { Command } from "./types.js";
 
@@ -19,9 +23,11 @@ import type { Command } from "./types.js";
 //   ・時間を進める（＋1日／＋4日／＋12日）：アプリの中の「今」（getNow()）を進める
 //   ・まとめ通知を今すぐ送る：定時通知・/summary と同じ処理で、設定したチャンネルに送る
 //   ・時間を元に戻す／リセット：リセットは記録・妖怪・守り神ポイント・通知を消す（設定と一覧は残る）
+//   ・守り神ポイント＋10：押した人の守り神ポイントだけを増やす（進化をすぐ見せるため。観測の記録は増えない）
 
 const DAY_SECONDS = 24 * 60 * 60;
 const ADVANCE_DAYS = [1, 4, 12];
+const GUARDIAN_BOOST = 10; // 守り神の進化を見せるために、押した人のポイントを増やす量
 
 function formatAppNow(offsetSeconds: number) {
   const now = new Date(Date.now() + offsetSeconds * 1000);
@@ -41,9 +47,13 @@ function formatAppNow(offsetSeconds: number) {
 
 function panel(offsetSeconds: number, notice?: string) {
   const advance = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    ADVANCE_DAYS.map((days) =>
+    ...ADVANCE_DAYS.map((days) =>
       new ButtonBuilder().setCustomId(`demo:advance:${days}`).setLabel(`＋${days}日`).setStyle(ButtonStyle.Primary),
     ),
+    new ButtonBuilder()
+      .setCustomId("demo:guardian")
+      .setLabel(`守り神ポイント＋${GUARDIAN_BOOST}`)
+      .setStyle(ButtonStyle.Primary),
   );
   const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId("demo:summary").setLabel("まとめ通知を今すぐ送る").setStyle(ButtonStyle.Success),
@@ -111,6 +121,20 @@ async function sendSummaryNow(interaction: ButtonInteraction, offsetSeconds: num
   }
 }
 
+// 押した人の守り神ポイントを増やし、守り神のカードを本人にだけ見せる
+async function boostGuardian(interaction: ButtonInteraction) {
+  const { memberKey } = createReportSession(interaction.guildId!, interaction.user.id);
+  const { before, after } = await addGuardianPoints(interaction.guildId!, memberKey, GUARDIAN_BOOST);
+  const headline = didGuardianEvolve(before, after.points)
+    ? "🛡️ **守り神が進化しました！**"
+    : `守り神ポイントが ${GUARDIAN_BOOST} 増えました。`;
+  await interaction.followUp({
+    ...(after.guardianKey ? guardianCard(after.guardianKey, after.points, headline) : guardianChoiceMessage(after.points)),
+    flags: MessageFlags.Ephemeral,
+  });
+  return `🛡️ 守り神ポイントを ${GUARDIAN_BOOST} 増やしました（${before} → ${after.points}）。観測の記録は増えていません。`;
+}
+
 export const demo: Command = {
   data: new SlashCommandBuilder()
     .setName("demo")
@@ -158,6 +182,8 @@ export const demo: Command = {
         notice = "⏪ 時間を本当の今に戻しました。";
       } else if (action === "summary") {
         notice = await sendSummaryNow(interaction, offset);
+      } else if (action === "guardian") {
+        notice = await boostGuardian(interaction);
       } else if (action === "reset-confirm") {
         const result = await resetDemoData(guildId);
         offset = 0;
