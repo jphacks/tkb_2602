@@ -39,6 +39,7 @@ declare
   v_tasks text[];
   v_name text;
   v_yokai_key text;
+  v_preferred_yokai_key text;
   v_kind integer;
 begin
   if nullif(btrim(p_guild_id), '') is null then
@@ -134,12 +135,31 @@ begin
         select 1 from public.task_types where guild_id = p_guild_id and task_types.name = items.name
       ) order by name
     loop
+      -- 複数の語が含まれる場合はY01〜Y10の順で最初に一致する種類を優先する。
+      v_preferred_yokai_key := case
+        when v_name ~ '洗' then 'Y01'
+        when v_name ~ 'ゴミ|ごみ' then 'Y02'
+        when v_name ~ '出しっぱ|置きっぱ' then 'Y03'
+        when v_name ~ '机' then 'Y04'
+        when v_name ~ '返却|戻' then 'Y05'
+        when v_name ~ '電気|照明' then 'Y06'
+        when v_name ~ '空調|エアコン' then 'Y07'
+        when v_name ~ '冷蔵|冷凍' then 'Y08'
+        when v_name ~ '掃除|ほこり' then 'Y09'
+        when v_name ~ '補充|切れ|備品' then 'Y10'
+        else null
+      end;
+
+      -- 希望の番号が使用済み・該当語なしなら、これまでどおり最小の空き番号を使う。
       select 'Y' || lpad(n::text, 2, '0') into v_yokai_key
       from generate_series(1, 10) as slots(n)
       where not exists (
         select 1 from public.task_types
         where guild_id = p_guild_id and yokai_key = 'Y' || lpad(n::text, 2, '0')
-      ) order by n limit 1;
+      ) order by
+        case when 'Y' || lpad(n::text, 2, '0') = v_preferred_yokai_key then 0 else 1 end,
+        n
+      limit 1;
       if not found then
         raise exception '割り当てられる妖怪（Y01〜Y10）がありません。以前の項目を再利用するか、妖怪の種類を増やしてください。'
           using errcode = '22023';
