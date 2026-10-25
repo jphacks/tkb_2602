@@ -12,7 +12,7 @@ declare
   v_result jsonb;
   v_i integer;
 begin
-  perform public.save_guild_settings(v_guild, '{"digest_hour":19,"digest_minute":30}', array['流し'], array['洗い物']);
+  perform public.save_guild_settings(v_guild, '{"digest_hour":19,"digest_minute":30,"birth_threshold":3}', array['流し'], array['洗い物']);
   perform public.save_guild_settings(v_other, '{}', array['別の場所'], array['別の雑務']);
   select id into strict v_location from public.locations where guild_id = v_guild;
   select id into strict v_task from public.task_types where guild_id = v_guild;
@@ -21,8 +21,11 @@ begin
   for v_i in 1..3 loop
     v_result := public.submit_report(gen_random_uuid(), v_guild, v_location, v_task, 'test-member', v_now);
   end loop;
-  if not (v_result @> '{"stage":"active","reportCount":3,"points":3,"yokaiLevel":1}'::jsonb)
-  then raise exception 'デモ時刻の報告で誕生しなかった'; end if;
+  if not (v_result @> '{"stage":"active","reportCount":3,"yokaiLevel":1}'::jsonb)
+  then raise exception 'デモ時刻の報告で誕生しなかった: %', v_result; end if;
+  -- 同じ人・場所・雑務への同時刻の報告は、3回でもポイント加算は初回だけ。
+  if not (v_result @> '{"points":1,"pointsAwarded":false}'::jsonb)
+  then raise exception '同時刻の報告でポイントの1時間制限が守られなかった: %', v_result; end if;
   if exists (select 1 from public.reports where guild_id = v_guild and created_at <> v_now)
     or not exists (select 1 from public.yokai_states where guild_id = v_guild
       and last_reported_at = v_now and born_at = v_now
