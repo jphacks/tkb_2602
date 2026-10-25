@@ -57,3 +57,14 @@ test("成仏があった妖怪だよりでは、効いた工夫の共有を一�
   ]);
   assert.doesNotMatch(withoutAscend, /効いた工夫/);
 });
+
+test("弱ってきた妖怪は、名前と「もうすぐ成仏しそう」を出す", () => {
+  const text = digest.formatNotificationDigest([
+    { id: "1", eventType: "weaken", yokaiId: "y1", yokaiName: "ゴミため坊", imageKey: "yokai_Y02_lv1.png", taskName: "ゴミ" },
+  ]);
+  assert.match(text, /弱ってきた：1件/);
+  assert.match(text, /\*\*ゴミため坊\*\*/);
+  assert.match(text, /もうすぐ成仏しそう/);
+  // 弱ってきた知らせだけなら、成仏の呼びかけは出さない
+  assert.doesNotMatch(text, /効いた工夫/);
+});

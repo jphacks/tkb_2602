@@ -82,7 +82,8 @@ Bot起動中は1分ごとに各Guildの設定を確認し、`notification_time`�
 定時通知・手動通知とも、Discordへの送信成功後にだけ`sent_at`を更新します。送信失敗時は未送信のまま残り、定時通知は同じ時刻枠で再試行します。
 
 - `presence`・`shadow`はプライバシー保護のため場所を表示せず、件数だけ通知する。
-- `birth`・`level_up`・`weaken`・`ascend`も現在は件数で通知する。
+- `birth`・`level_up`・`weaken`・`ascend`も現在は件数で通知する。`birth`・`weaken`・`ascend` は妖怪の名前も出す。
+- `weaken`（弱ってきた）は、`process_yokai_ascensions` が最後の報告から成仏日数の半分を過ぎた妖怪に1回だけ作る。同じ判定で成仏する妖怪には作らない。
 - 未送信行が0件ならDiscordへ投稿しない。
 - Botが通知時刻の1分間を通して停止していた場合、その日の通知は翌日の指定時刻まで待つ。
 - 実DBへは、設定保存SQL、通知配信migration、PR #5のevent type migration、妖怪名・画像migration、成仏判定SQL、最新の報告関数の順で適用する。

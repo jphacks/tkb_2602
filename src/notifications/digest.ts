@@ -23,7 +23,7 @@ const EVENT_LABELS: Record<string, string> = {
   shadow: "影",
   birth: "妖怪誕生",
   level_up: "レベルアップ",
-  weaken: "弱体化",
+  weaken: "弱ってきた",
   ascend: "成仏",
 };
 
@@ -103,7 +103,7 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[], bias: B
       ...jobs
         .filter((job) =>
           job.eventType === type &&
-          (type === "birth" || type === "ascend") &&
+          (type === "birth" || type === "weaken" || type === "ascend") &&
           job.yokaiId
         )
         .flatMap((job) => [
@@ -111,6 +111,8 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[], bias: B
           // 生まれた妖怪には、どうすれば残らなくなるか（お祓いの作法）を添える
           ...(type === "birth" ? [`    - お祓いの作法：${oharaiAdvice(job.taskName)}`] : []),
         ]),
+      // 弱ってきた妖怪は、このまま同じことが起きなければ成仏する
+      ...(type === "weaken" ? ["  - このまま同じことが起きなければ、もうすぐ成仏しそうです"] : []),
     ]),
     // 成仏があったときは、効いた工夫の共有を一度だけ呼びかける
     ...(counts.has("ascend") ? ["", `-# ${ASCEND_SHARE}`] : []),
