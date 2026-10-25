@@ -199,9 +199,11 @@ export const youkaiSettei: Command = {
           ),
         new LabelBuilder()
           .setLabel("やり残されていたことの一覧（1行に1つ）")
-          .setDescription("それぞれに妖怪が1体ずつ対応します")
+          // 妖怪は「普段あってはいけない状態」だけ。ゴミの回収のような周期的な仕事を入れると、
+          // こなすたびに観測が増え、健全な研究室でも妖怪が出てしまうため
+          .setDescription("普段あってはいけない状態だけを入れてください。ゴミの回収など、決まった周期の仕事は入れません")
           .setTextInputComponent(
-            listInput("youkai-settei:task-list", taskTypes.map((t) => t.name), "洗い物\nゴミ出し\n備品の補充"),
+            listInput("youkai-settei:task-list", taskTypes.map((t) => t.name), "洗い物が残っていた\nゴミがあふれていた\n備品が切れていた"),
           ),
       );
 
