@@ -108,6 +108,9 @@ export function reportReply(result: ReportResult, context: ReplyContext): ReplyM
   if (result.duplicate) {
     return { content: "この記録は、すでに受け付けています。" };
   }
+  if (result.taskKind === "routine") {
+    return { content: `いつもの仕事を記録しました。\n${pointsLine(result)}` };
+  }
   const content = `観測を記録しました。\n${pointsLine(result)}`;
   if (result.stage === "presence") {
     return textCard(content, "気配", `……${where}のあたりに、何かの気配がする。`, STAGE_COLORS.presence);

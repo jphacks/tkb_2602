@@ -55,6 +55,7 @@ type ReportRow = {
   id: string;
   location_id: string;
   task_type_id: string;
+  task_kind: "abnormal" | "routine";
 };
 
 type PageResult<T> = {
@@ -146,7 +147,7 @@ export async function getPeriodicReport(
   const reports = await readAllPages<ReportRow>(
     (from, to) => supabase
       .from("reports")
-      .select("id, location_id, task_type_id")
+      .select("id, location_id, task_type_id, task_kind")
       .eq("guild_id", guildId)
       .gte("created_at", periodStart)
       .lt("created_at", periodEnd)
@@ -158,6 +159,8 @@ export async function getPeriodicReport(
 
   const counts = new Map<string, number>();
   for (const report of reports) {
+    // 全記録の件数には含めるが、いつもの仕事を妖怪の期間内観測数には数えない。
+    if (report.task_kind === "routine") continue;
     const key = `${report.location_id}:${report.task_type_id}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }

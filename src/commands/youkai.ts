@@ -210,7 +210,7 @@ export const youkai: Command = {
       });
       console.log(`[記録] 回数 ${result.reportCount} / 状態 ${result.stage} / Lv.${result.yokaiLevel}`);
 
-      if (isBirth(result) || isEvolution(result)) {
+      if (result.yokaiId && (isBirth(result) || isEvolution(result))) {
         // 妖怪の名前と画像（submit_report が保存したもの）。取れなくても、文字だけで返事は出す
         const identity = await getYokaiIdentity(guildId, result.yokaiId).catch((error) => {
           console.error("妖怪の名前と画像を取得できませんでした:", error);
