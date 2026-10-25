@@ -109,6 +109,7 @@ async function sendSummaryNow(interaction: ButtonInteraction, offsetSeconds: num
       async (messages) => {
         for (const message of messages) await channel.send(message);
       },
+      interaction.guild?.memberCount,
     );
     return count === 0
       ? "まだ伝えていない妖怪の変化はありませんでした。"

@@ -64,3 +64,14 @@ export async function addGuardianPoints(
   if (error) throw new Error(`守り神ポイントの保存に失敗しました: ${error.message}`);
   return { before: current.points, after: await getGuardian(guildId, memberKey) };
 }
+
+// 研究室（サーバー）の全員の守り神ポイント（偏りの計算用）。誰のポイントかは返さない
+export async function getGuildPoints(guildId: string): Promise<number[]> {
+  const { data, error } = await supabase
+    .from("guardian_points")
+    .select("points")
+    .eq("guild_id", guildId)
+    .returns<Array<{ points: number }>>();
+  if (error) throw new Error(`守り神ポイントの取得に失敗しました: ${error.message}`);
+  return (data ?? []).map((row) => row.points);
+}

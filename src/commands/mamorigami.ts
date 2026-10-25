@@ -1,5 +1,6 @@
 import { InteractionContextType, MessageFlags, SlashCommandBuilder } from "discord.js";
-import { chooseGuardian, getGuardian } from "../database/guardians.js";
+import { chooseGuardian, getGuardian, getGuildPoints } from "../database/guardians.js";
+import { myShareText } from "../logic/bias.js";
 import { createReportSession } from "../database/report-session.js";
 import { GUARDIANS, isGuardianKey } from "../logic/guardian.js";
 import { guardianCard, guardianChoiceMessage } from "../notifications/guardian-card.js";
@@ -21,9 +22,13 @@ export const mamorigami: Command = {
     try {
       const { memberKey } = createReportSession(interaction.guildId!, interaction.user.id);
       const record = await getGuardian(interaction.guildId!, memberKey);
+      // 自分が担った割合は、本人にだけ見せる（ほかの人の数は出さない）。読めなければ出さない
+      const share = await getGuildPoints(interaction.guildId!)
+        .then((points) => myShareText(record.points, points.reduce((sum, p) => sum + p, 0)))
+        .catch(() => null);
       await interaction.editReply(
         record.guardianKey
-          ? guardianCard(record.guardianKey, record.points, "あなたの守り神です。")
+          ? guardianCard(record.guardianKey, record.points, ["あなたの守り神です。", ...(share ? [`-# ${share}`] : [])].join("\n"))
           : guardianChoiceMessage(record.points),
       );
     } catch (error) {
