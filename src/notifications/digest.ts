@@ -9,6 +9,8 @@ import {
   type PendingNotificationJob,
 } from "../database/notification-jobs.js";
 import { getNow } from "../time.js";
+import { getGuildPoints } from "../database/guardians.js";
+import { type BiasStage, biasDigestLines, biasStage } from "../logic/bias.js";
 import { ASCEND_HINT, oharaiAdvice } from "../logic/oharai.js";
 import { displayYokaiName } from "./yokai-catalog.js";
 
@@ -79,7 +81,7 @@ function normalizeNotificationTime(value: string): string {
   return `${match[1]}:${match[2]}`;
 }
 
-export function formatNotificationDigest(jobs: PendingNotificationJob[]): string {
+export function formatNotificationDigest(jobs: PendingNotificationJob[], bias: BiasStage = "unknown"): string {
   const counts = new Map<string, number>();
   for (const job of jobs) {
     counts.set(job.eventType, (counts.get(job.eventType) ?? 0) + 1);
@@ -106,16 +108,19 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[]): string
           ...(type === "birth" ? [`    - お祓いの作法：${oharaiAdvice(job.taskName)}`] : []),
         ]),
     ]),
+    // 片づけが一部の人に偏っているときは、偏りそのものを妖怪（かたより坊）として出す
+    ...biasDigestLines(bias),
   ].join("\n");
 }
 
 export function buildNotificationDigestMessages(
   jobs: PendingNotificationJob[],
+  bias: BiasStage = "unknown",
 ): NotificationMessage[] {
   const featured = jobs.filter((job) =>
     (job.eventType === "birth" || job.eventType === "ascend") && job.yokaiId
   );
-  if (featured.length === 0) return [{ content: formatNotificationDigest(jobs) }];
+  if (featured.length === 0) return [{ content: formatNotificationDigest(jobs, bias) }];
 
   const messages: NotificationMessage[] = [];
   for (let from = 0; from < featured.length; from += 10) {
@@ -136,13 +141,25 @@ export function buildNotificationDigestMessages(
     });
     messages.push({
       content: from === 0
-        ? formatNotificationDigest(jobs)
+        ? formatNotificationDigest(jobs, bias)
         : `## 👻 妖怪だより（画像 ${Math.floor(from / 10) + 1}）`,
       embeds,
       ...(files.length > 0 ? { files } : {}),
     });
   }
   return messages;
+}
+
+// 片づけの偏りを判定する。読めなくても、妖怪だよりは送る（偏りは出さない）
+async function judgeBias(guildId: string, memberCount: number | undefined): Promise<BiasStage> {
+  if (!memberCount) return "unknown";
+  try {
+    // この Bot 自身は数えない
+    return biasStage(await getGuildPoints(guildId), memberCount - 1);
+  } catch (error) {
+    console.error("片づけの偏りを判定できませんでした:", error);
+    return "unknown";
+  }
 }
 
 export class NotificationDeliveryInProgressError extends Error {
@@ -158,6 +175,8 @@ export async function deliverPendingNotifications(
   guildId: string,
   sentAt: Date,
   send: (messages: NotificationMessage[]) => Promise<unknown>,
+  // サーバーの人数（Bot を含む Discord の数）。分かれば、片づけの偏り（かたより坊）も判定する
+  memberCount?: number,
 ): Promise<number> {
   if (deliveringGuilds.has(guildId)) {
     throw new NotificationDeliveryInProgressError();
@@ -170,7 +189,7 @@ export async function deliverPendingNotifications(
     const jobs = await getPendingNotificationJobs(guildId);
     if (jobs.length === 0) return 0;
 
-    await send(buildNotificationDigestMessages(jobs));
+    await send(buildNotificationDigestMessages(jobs, await judgeBias(guildId, memberCount)));
     await markNotificationJobsSent(jobs.map((job) => job.id), sentAt);
     return jobs.length;
   } finally {
@@ -203,6 +222,7 @@ export async function runScheduledNotifications(
           }
           for (const message of messages) await channel.send(message);
         },
+        client.guilds?.cache.get(schedule.guildId)?.memberCount,
       );
       if (count > 0) {
         console.log(`[通知] Guild ${schedule.guildId}: ${count}件を送信しました`);

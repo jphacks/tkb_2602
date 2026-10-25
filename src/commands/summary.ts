@@ -32,6 +32,7 @@ export const summary: Command = {
           await interaction.editReply(messages[0]);
           for (const message of messages.slice(1)) await interaction.followUp(message);
         },
+        interaction.guild?.memberCount,
       );
       if (count === 0) {
         await interaction.editReply("未報告の妖怪の変化はありません。");
