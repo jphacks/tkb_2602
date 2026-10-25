@@ -81,6 +81,10 @@ function normalizeNotificationTime(value: string): string {
   return `${match[1]}:${match[2]}`;
 }
 
+// 成仏した妖怪には、何が効いたかを研究室で分かち合うよう呼びかける（成功体験を次の問題に生かすため）。
+// 書くかどうかは自由。名前が出るのは、自分から書いた人だけ
+const ASCEND_SHARE = "🎉 同じことが起きなくなり、妖怪は成仏しました。置き場所を変えた、当番を決めたなど、効いた工夫があれば、このメッセージへの返信で研究室に共有しよう";
+
 export function formatNotificationDigest(jobs: PendingNotificationJob[], bias: BiasStage = "unknown"): string {
   const counts = new Map<string, number>();
   for (const job of jobs) {
@@ -108,6 +112,8 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[], bias: B
           ...(type === "birth" ? [`    - お祓いの作法：${oharaiAdvice(job.taskName)}`] : []),
         ]),
     ]),
+    // 成仏があったときは、効いた工夫の共有を一度だけ呼びかける
+    ...(counts.has("ascend") ? ["", `-# ${ASCEND_SHARE}`] : []),
     // 片づけが一部の人に偏っているときは、偏りそのものを妖怪（かたより坊）として出す
     ...biasDigestLines(bias),
   ].join("\n");
@@ -132,7 +138,9 @@ export function buildNotificationDigestMessages(
       const path = imagePath(job.imageKey, job.eventType);
       const description = job.eventType === "birth"
         ? `お祓いの作法：${oharaiAdvice(job.taskName)}\n-# ${ASCEND_HINT}`
-        : undefined;
+        : job.eventType === "ascend"
+          ? "🎉 同じことが起きなくなり、成仏しました"
+          : undefined;
       if (!path || !job.imageKey) return { title, ...(description ? { description } : {}) };
 
       const attachmentName = `${job.id.replace(/[^a-zA-Z0-9_-]/g, "_")}-${job.imageKey}`;
