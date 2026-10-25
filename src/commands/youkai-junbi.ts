@@ -84,7 +84,7 @@ async function findOrCreateReportChannel(guild: Guild, category: CategoryChannel
   const found = guild.channels.cache.find(
     (c) => c.type === ChannelType.GuildText && c.name === REPORT_CHANNEL_NAME && c.parentId === category.id,
   );
-  if (found) return `・観測と守り神：<#${found.id}>（今あるチャンネルをそのまま使います）`;
+  if (found) return `・観測報告と守り神確認：<#${found.id}>（今あるチャンネルをそのまま使います）`;
   const channel = await guild.channels.create({
     name: REPORT_CHANNEL_NAME,
     type: ChannelType.GuildText,
@@ -92,7 +92,7 @@ async function findOrCreateReportChannel(guild: Guild, category: CategoryChannel
     topic: "/youkai で観測を記録し、/mamorigami で自分の守り神を見る場所です。返事はあなたにだけ見えます。",
   });
   await channel.send({ content: REPORT_GUIDE, allowedMentions: { parse: [] } });
-  return `・観測と守り神：<#${channel.id}> を作りました`;
+  return `・観測報告と守り神確認：<#${channel.id}> を作りました`;
 }
 
 async function setupGuild(guild: Guild, adminUserId: string): Promise<string> {
@@ -130,7 +130,7 @@ async function setupGuild(guild: Guild, adminUserId: string): Promise<string> {
   // 3. ひとことのチャンネル（管理者とボットだけが見られる）
   let admin = await existingTextChannel(guild, settings.adminChannelId);
   if (admin) {
-    lines.push(`・ひとこと：<#${admin.id}>（設定済みのチャンネルをそのまま使います）`);
+    lines.push(`・匿名の声・一覧の追加：<#${admin.id}>（設定済みのチャンネルをそのまま使います）`);
   } else {
     category ??= await findOrCreateCategory(guild);
     admin = await guild.channels.create({
@@ -156,7 +156,7 @@ async function setupGuild(guild: Guild, adminUserId: string): Promise<string> {
         { id: adminUserId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] },
       ],
     });
-    lines.push(`・ひとこと：<#${admin.id}> を作りました（管理者とボットだけが見られます）`);
+    lines.push(`・匿名の声・一覧の追加：<#${admin.id}> を作りました（管理者とボットだけが見られます）`);
   }
 
   await saveGuildSettings(guild.id, { notificationChannelId: notify.id, adminChannelId: admin.id });
