@@ -1,6 +1,7 @@
 begin;
 
--- 最後の報告から設定日数が経過した妖怪を成仏させ、通知待ちへ登録する。
+-- 最後の報告から設定日数の半分が経過した妖怪を「弱ってきた」として通知待ちへ登録し、
+-- 設定日数が経過した妖怪を成仏させ、通知待ちへ登録する。
 -- 状態更新と通知ジョブ作成を同じトランザクションで行い、二重登録を防ぐ。
 create or replace function public.process_yokai_ascensions(
   p_guild_id text,
@@ -32,6 +33,28 @@ begin
   if v_jobutsu_days is null or v_jobutsu_days < 1 then
     raise exception '成仏日数が不正です';
   end if;
+
+  -- 成仏までの日数の半分が過ぎた妖怪は「弱ってきた」として、妖怪だよりで一度だけ知らせる。
+  -- 今回の判定で成仏する妖怪には出さない（成仏の知らせだけにする）。
+  -- event_key に最後の報告時刻を入れるので、また報告されて元気になれば、次に弱ったときにもう一度知らせる。
+  insert into public.notification_jobs (
+    event_key,
+    guild_id,
+    yokai_id,
+    event_type
+  )
+  select
+    id::text || ':weaken:' || last_reported_at::text,
+    guild_id,
+    id,
+    'weaken'
+  from public.yokai_states
+  where guild_id = p_guild_id
+    and stage = 'active'
+    and last_reported_at is not null
+    and last_reported_at + make_interval(secs => v_jobutsu_days * 86400 / 2.0) <= p_now
+    and last_reported_at + make_interval(days => v_jobutsu_days) > p_now
+  on conflict (event_key) do nothing;
 
   with ascended as (
     update public.yokai_states

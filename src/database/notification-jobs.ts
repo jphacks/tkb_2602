@@ -106,7 +106,7 @@ export async function getPendingNotificationJobs(
   );
 
   const yokaiIds = [...new Set(rows.flatMap((row) =>
-    row.yokai_id && ["birth", "ascend"].includes(row.event_type)
+    row.yokai_id && ["birth", "weaken", "ascend"].includes(row.event_type)
       ? [row.yokai_id]
       : []
   ))];
