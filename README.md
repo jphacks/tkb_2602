@@ -381,7 +381,8 @@ CLOUDFLARE_API_TOKEN=
 
 ### 2. SupabaseへSQLを適用
 
-Supabaseの SQL Editor で、対象環境の既存スキーマに対して次の順に実行します。
+新規DBでは、Supabaseの SQL Editor で最初に `sql/initial_schema.sql` を実行し、基本7テーブルを作成します。
+既存DBでは初期スキーマを再実行せず、以下の更新SQLを順に適用します。新規DBでも初期スキーマに続けて同じ更新SQLを適用してください。
 
 1. `sql/functions/save_guild_settings.sql`
 2. `sql/migrations/20261024_notification_delivery.sql`
@@ -392,11 +393,19 @@ Supabaseの SQL Editor で、対象環境の既存スキーマに対して次の
 7. `sql/migrations/20261024_pending_observations.sql`
 8. `sql/migrations/20261024_custom_yokai.sql`
 9. `sql/migrations/20261024_custom_yokai_image_key.sql`
-10. `sql/functions/process_yokai_ascensions.sql`
-11. `sql/functions/reset_demo_data.sql`
-12. `sql/migrations/20261025_task_birth_threshold.sql`
-13. `sql/migrations/20261026_task_kind.sql`
-14. `sql/functions/submit_report.sql`
+10. `sql/migrations/20261026_guild_jobutsu_days.sql`
+11. `sql/functions/process_yokai_ascensions.sql`
+12. `sql/functions/reset_demo_data.sql`
+13. `sql/migrations/20261025_task_birth_threshold.sql`
+14. `sql/migrations/20261026_task_kind.sql`
+15. `sql/functions/submit_report.sql`
+16. `sql/migrations/20261025164820_normalize_notification_time.sql`
+
+成仏日数の列は、初期スキーマの `decay_days` から現在の関数が使う `jobutsu_days` へ、10番のSQLで既存値を保って変更します。
+すでに `jobutsu_days` があるDBでは、その設定を維持します。
+16番のSQLは、作成済みの `notification_time` にも既定値18:00と `NOT NULL` を設定し、NULLの行だけを18:00で補完します。設定済みの通知時刻は維持します。
+適用前後に `sql/checks/notification_time_status.sql` を実行すると、列定義・NULL件数と、他の設定を保持したことをハッシュで確認できます。
+適用後に `sql/checks/rls_status.sql` を実行し、基本7テーブルと `guardian_cooldowns`・`pending_observations` の `rls_enabled` がすべて `true` であることを確認します。
 
 詳細とDB単体テストは [src/database/README.md](src/database/README.md) を参照してください。
 
