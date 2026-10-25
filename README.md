@@ -1,6 +1,7 @@
 # 妖怪だより
 
-![妖怪だより](src/assets/cover.png)
+![妖怪だより](src/assets/cover_10251252.svg)
+
 
 <p align="center"><strong>その「困った」は、妖怪のしわざ。</strong></p>
 
