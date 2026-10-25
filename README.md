@@ -399,7 +399,7 @@ npm run typecheck
 npm test
 ```
 
-自動テストは 98 件あり、Discord や Supabase、Cloudflare には実際につながずに、通信の部分を差しかえて確かめています。
+自動テストは 105 件あり、Discord や Supabase、Cloudflare には実際につながずに、通信の部分を差しかえて確かめています。
 
 主な実装箇所：
 
