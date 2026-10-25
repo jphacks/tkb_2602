@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { ReportResult } from "../database/reports.js";
 import type { YokaiIdentity } from "../database/yokai.js";
 import { guardianProgressBar } from "../logic/guardian.js";
+import { ASCEND_HINT, oharaiAdvice } from "../logic/oharai.js";
 import { yokaiIntroFromImageKey } from "./yokai-catalog.js";
 
 // /youkai の記録のあと、本人にだけ見せる返事（4番の領域）
@@ -70,7 +71,13 @@ export function birthFrames(result: ReportResult, context: ReplyContext, identit
       content: `観測を記録しました。\n${pointsLine(result)}`,
       ...yokaiCard(
         `${nameOf(identity)} が姿を現した！`,
-        [`${where}に住みついた妖怪です。（Lv.${result.yokaiLevel}）`, ...(intro ? ["", intro] : [])].join("\n"),
+        [
+          `${where}に住みついた妖怪です。（Lv.${result.yokaiLevel}）`,
+          ...(intro ? ["", intro] : []),
+          "",
+          `**お祓いの作法**：${oharaiAdvice(context.taskTypeName)}`,
+          `-# ${ASCEND_HINT}`,
+        ].join("\n"),
         identity,
       ),
     },

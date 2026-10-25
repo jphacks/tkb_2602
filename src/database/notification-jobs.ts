@@ -13,6 +13,8 @@ export type PendingNotificationJob = {
   yokaiId: string | null;
   yokaiName: string | null;
   imageKey: string | null;
+  // その妖怪の「やり残されていたこと」の名前（お祓いの作法を選ぶのに使う）。なければ null
+  taskName?: string | null;
 };
 
 export async function processYokaiAscensions(
@@ -45,6 +47,7 @@ type YokaiIdentityRow = {
   id: string;
   yokai_name: string | null;
   image_key: string | null;
+  taskType?: { name: string } | null;
 };
 
 type PageResult<T> = {
@@ -111,7 +114,7 @@ export async function getPendingNotificationJobs(
   for (let from = 0; from < yokaiIds.length; from += 500) {
     const { data, error } = await supabase
       .from("yokai_states")
-      .select("id, yokai_name, image_key")
+      .select("id, yokai_name, image_key, taskType:task_types(name)")
       .in("id", yokaiIds.slice(from, from + 500))
       .returns<YokaiIdentityRow[]>();
     if (error) throw new Error(`妖怪の表示情報の取得に失敗しました: ${error.message}`);
@@ -127,6 +130,7 @@ export async function getPendingNotificationJobs(
       yokaiId: row.yokai_id,
       yokaiName: identity?.yokai_name ?? null,
       imageKey: identity?.image_key ?? null,
+      taskName: identity?.taskType?.name ?? null,
     };
   });
 }

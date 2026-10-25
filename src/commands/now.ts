@@ -6,6 +6,7 @@ import {
   getCurrentActiveYokai,
   type CurrentActiveYokai,
 } from "../database/current-yokai.js";
+import { oharaiAdvice } from "../logic/oharai.js";
 import type { Command } from "./types.js";
 
 const MESSAGE_LIMIT = 1_900;
@@ -28,6 +29,8 @@ export function formatCurrentYokai(
       currentLocation = item.locationName;
     }
     lines.push(`- **${item.yokaiName}**（${item.taskTypeName}）— レベル ${item.level}`);
+    // どうすれば残らなくなるか（お祓いの作法）。誰かを責める言い方はしない
+    lines.push(`  - お祓いの作法：${oharaiAdvice(item.taskTypeName)}`);
   }
 
   const messages: string[] = [];
