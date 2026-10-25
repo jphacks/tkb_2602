@@ -7,6 +7,7 @@ import {
   GUARDIANS,
   type GuardianKey,
   guardianImageKey,
+  guardianProgressBar,
   guardianStage,
   nextGuardianStage,
 } from "../logic/guardian.js";
@@ -50,8 +51,8 @@ export function guardianCard(key: GuardianKey | null, points: number, headline: 
       description: [
         guardian.description,
         "",
-        `守り神ポイント：**${points}**`,
-        next ? `あと **${next.min - points}** ポイントで「${next.title}」に進化します` : "最後の姿まで進化しました",
+        `守り神ポイント　${guardianProgressBar(points)}`,
+        next ? `「${next.title}」に進化するまで、あと **${next.min - points}** ポイント` : "最後の姿まで進化しました",
       ].join("\n"),
       color: GUARDIAN_COLOR,
       ...(path ? { image: { url: `attachment://${imageKey}` } } : {}),

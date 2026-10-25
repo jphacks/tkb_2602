@@ -45,6 +45,17 @@ export function didGuardianEvolve(before: number, after: number): boolean {
   return guardianStage(after).level > guardianStage(before).level;
 }
 
+// 次の姿までの進み具合を、10マスのバーで表す（例：▰▰▰▰▱▱▱▱▱▱ 18 / 30　次の姿まであと12）
+const PROGRESS_CELLS = 10;
+
+export function guardianProgressBar(points: number): string {
+  const stage = guardianStage(points);
+  const next = nextGuardianStage(points);
+  if (!next) return `${"▰".repeat(PROGRESS_CELLS)} ${points}　最後の姿です`;
+  const filled = Math.floor(((points - stage.min) / (next.min - stage.min)) * PROGRESS_CELLS);
+  return `${"▰".repeat(filled)}${"▱".repeat(PROGRESS_CELLS - filled)} ${points} / ${next.min}　次の姿まであと${next.min - points}`;
+}
+
 // 画像のファイル名（src/assets/birth/kami_A_lv10.png など）
 export function guardianImageKey(key: GuardianKey, points: number): string {
   return `kami_${key}_lv${guardianStage(points).level}.png`;
