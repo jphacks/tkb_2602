@@ -45,3 +45,15 @@ test("妖怪だよりで、生まれた妖怪にだけお祓いの作法を添�
   assert.match(text, /\*\*ゴミため坊\*\*\n    - お祓いの作法：.*ゴミの日/);
   assert.equal((text.match(/お祓いの作法/g) ?? []).length, 1);
 });
+
+test("成仏があった妖怪だよりでは、効いた工夫の共有を一度だけ呼びかける", () => {
+  const withAscend = digest.formatNotificationDigest([
+    { id: "1", eventType: "ascend", yokaiId: "y1", yokaiName: "ゴミため坊", imageKey: "yokai_Y02_lv1.png", taskName: "ゴミ" },
+    { id: "2", eventType: "ascend", yokaiId: "y2", yokaiName: "あらいわすれ坊", imageKey: "yokai_Y01_lv1.png", taskName: "洗い物" },
+  ]);
+  assert.equal((withAscend.match(/効いた工夫/g) ?? []).length, 1);
+  const withoutAscend = digest.formatNotificationDigest([
+    { id: "3", eventType: "presence", yokaiId: null, yokaiName: null, imageKey: null },
+  ]);
+  assert.doesNotMatch(withoutAscend, /効いた工夫/);
+});
