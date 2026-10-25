@@ -158,6 +158,16 @@ await test("report関連の単体テスト", async (t) => {
     );
   });
 
+  await t.test("いつもの仕事の結果は妖怪なしで受け取れる", async () => {
+    responseBody = {
+      ...success, taskKind: "routine", yokaiId: null, stage: null,
+      reportCount: 0, yokaiLevel: 0, pointsAwarded: true, guardianKey: "B",
+    };
+    const result = await submitReport(input);
+    assert.deepEqual(result, responseBody);
+    assert.equal(rpcCalls.at(-1).p_task_type_id, input.taskTypeId);
+  });
+
   await t.test("DBエラーを呼び出し元へ返す", async () => {
     responseStatus = 400;
     responseBody = {

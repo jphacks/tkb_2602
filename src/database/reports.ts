@@ -13,9 +13,12 @@ export type ReportInput = {
 export type ReportResult = {
   duplicate: boolean;
   points: number;
-  yokaiId: string;
+  // routine（いつもの仕事）は妖怪を作らず、yokaiId・stage は null、回数・レベルは0。
+  // 古いSQLとの互換性のため taskKind は省略可（省略時は従来の abnormal）。
+  taskKind?: "abnormal" | "routine";
+  yokaiId: string | null;
   reportCount: number;
-  stage: "presence" | "shadow" | "active" | "ascended";
+  stage: "presence" | "shadow" | "active" | "ascended" | null;
   yokaiLevel: number;
   // 守り神ポイントが今回増えたか（同じ場所×やり残されていたことは1時間に1回まで）
   // ※ 20261024_guardians.sql の反映前の関数は返さないので、undefined のことがある

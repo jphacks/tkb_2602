@@ -40,6 +40,7 @@ await test("定期報告用のDB取得", async (t) => {
     id: "report-1", guild_id: guildId,
     location_id: state.location_id, task_type_id: state.task_type_id,
     created_at: "2026-10-24T08:00:00Z",
+    task_kind: "abnormal",
   };
   let db;
   let calls;
@@ -140,6 +141,16 @@ await test("定期報告用のDB取得", async (t) => {
     const result = await getPeriodicReport(guildId, period);
     assert.equal(result.periodReportCount, 2);
     assert.equal(result.yokai[0].periodReportCount, 2);
+  });
+
+  await t.test("いつもの仕事は全記録に含め、妖怪の期間内観測数には含めない", async () => {
+    reset();
+    db.reports.push({ ...report, id: "routine-report", task_kind: "routine" });
+    const result = await getPeriodicReport(guildId, period);
+    assert.equal(result.periodReportCount, 2);
+    assert.equal(result.yokai[0].periodReportCount, 1);
+    assert.equal(result.yokai[0].reportCount, 5);
+    assert.ok(calls.find((call) => call.table === "reports").query.get("select").includes("task_kind"));
   });
 
   await t.test("気配・影・他サーバーの妖怪は公開一覧に出さず、成仏済みは含める", async () => {

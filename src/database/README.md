@@ -62,6 +62,35 @@ await saveTaskSettings(guildId, 3, ["洗い物", "ごみ出し"]);
 個別の変更用には`saveGuildSettings()`・`saveLocationNames()`・`saveTaskTypeNames()`も利用できます。
 複数の変更をまとめて確定したい画面では、上の2つの関数を使ってください。
 
+## いつもの仕事の記録
+
+`task_types.task_kind`で、`abnormal`（あってはいけない状態）と`routine`（いつもの仕事）を区別します。
+既存の雑務・設定画面から追加する雑務は、従来どおり`abnormal`になります。
+設定画面の入力方法は未対応です。種類を指定する場合は、DBで対象の行を変更してください。
+設定画面から一覧を再保存しても、既存の雑務の種類は維持します。
+
+適用順は、**`sql/migrations/20261026_task_kind.sql` → `sql/functions/submit_report.sql` → Botの更新・再起動**です。
+列追加SQLは`task_types`と`reports`へ`task_kind`を追加します。再実行しても指定済みの種類は初期化しません。
+`reports.task_kind`は記録時の種類で、雑務の種類を後から変えた場合も過去の記録や再送の扱いを維持します。
+
+たとえば、登録済みの雑務を「いつもの仕事」にする場合は、サーバー・名前を実際の値に置き換えて実行します。
+
+```sql
+begin;
+-- 観測・設定保存と同じサーバー行で順番に処理する。
+select 1 from public.guild_settings where guild_id = '対象のサーバーID' for update;
+update public.task_types set task_kind = 'routine'
+where guild_id = '対象のサーバーID' and name = 'ごみの回収';
+commit;
+```
+
+- `routine`でも`/youkai`から記録でき、`reports`への保存と守り神ポイントの加算を同じトランザクションで行います。
+- 同じ人・場所・雑務へのポイント加算は1時間に1回までです。同じ`request_id`の再送は記録もポイントも増やしません。
+- 妖怪の作成・観測数の更新・観測に伴う通知ジョブの作成は行わず、本人には仕事の記録とポイントだけを返します。
+- 既存の妖怪がある雑務を`routine`に変えても、その妖怪は削除・更新しません。最後の異常観測からの弱体化・成仏判定は継続します。
+- 期間内の全記録数にはいつもの仕事も含めますが、妖怪ごとの期間内観測数には含めません。
+- 雑務の追加時の妖怪キー割り当ては従来どおりです。種類変更でキーは解放しません。
+
 ## 未送信通知の定時配信
 
 最初に`sql/migrations/20261024_notification_delivery.sql`をSupabaseのSQL Editorで実行し、
@@ -141,3 +170,7 @@ HTTP応答をモックし、期間境界、別サーバーの分離、気配・�
 DB側の保存処理は、SQL Editorで`sql/functions/tests/save_guild_settings_test.sql`の全文を実行して確認できます。
 このテストは使い捨てのサーバーIDで検証し、最後に`rollback`するのでテストデータを残しません。
 初回保存・部分更新・無効化と再有効化・過去の報告の保持・サーバー分離・妖怪キー不足時のロールバック・実行権限を確認します。
+
+観測処理は`sql/functions/tests/submit_report_test.sql`、いつもの仕事の分岐は
+`sql/functions/tests/routine_report_test.sql`で確認できます。列追加SQLと最新の関数を先に適用してください。
+いつもの仕事のテストは、妖怪・通知を作らないこと、ポイントの1時間制限、二重送信、種類変更後の再送と既存妖怪の保持を検証し、最後にロールバックします。

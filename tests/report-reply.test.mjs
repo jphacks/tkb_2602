@@ -40,6 +40,21 @@ test("ポイントが増えなかったときは、1時間に1回の説明を出
   assert.match(r.content, /1時間に1回/);
 });
 
+test("いつもの仕事はポイントだけを表示し、妖怪のカードや演出を出さない", () => {
+  const routine = { ...base, taskKind: "routine", yokaiId: null, reportCount: 0, stage: null, yokaiLevel: 0 };
+  const message = reply.reportReply(routine, context);
+  assert.match(message.content, /いつもの仕事を記録しました/);
+  assert.match(message.content, /18 \/ 30/);
+  assert.equal(message.embeds, undefined);
+  assert.equal(message.files, undefined);
+  assert.equal(reply.isBirth(routine), false);
+  assert.equal(reply.isEvolution(routine), false);
+  assert.match(reply.reportReply({ ...routine, pointsAwarded: false }, context).content, /1時間に1回/);
+  assert.deepEqual(reply.reportReply({ ...routine, duplicate: true }, context), {
+    content: "この記録は、すでに受け付けています。",
+  });
+});
+
 test("誕生のカードに、妖怪の紹介文が入る", () => {
   const frames = reply.birthFrames(
     { ...base, stage: "active", yokaiLevel: 1 },
