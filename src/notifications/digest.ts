@@ -9,8 +9,8 @@ import {
   type PendingNotificationJob,
 } from "../database/notification-jobs.js";
 import { getNow } from "../time.js";
-import { getGuildPoints } from "../database/guardians.js";
-import { type BiasStage, biasDigestLines, biasStage } from "../logic/bias.js";
+import { getRecentCleaningCounts } from "../database/guardians.js";
+import { BIAS_WINDOW_DAYS, type BiasStage, biasDigestLines, biasStage } from "../logic/bias.js";
 import { ASCEND_HINT, oharaiAdvice } from "../logic/oharai.js";
 import { displayYokaiName } from "./yokai-catalog.js";
 
@@ -161,11 +161,13 @@ export function buildNotificationDigestMessages(
 }
 
 // 片づけの偏りを判定する。読めなくても、妖怪だよりは送る（偏りは出さない）
-async function judgeBias(guildId: string, memberCount: number | undefined): Promise<BiasStage> {
+async function judgeBias(guildId: string, memberCount: number | undefined, now: Date): Promise<BiasStage> {
   if (!memberCount) return "unknown";
   try {
     // この Bot 自身は数えない
-    return biasStage(await getGuildPoints(guildId), memberCount - 1);
+    // 直近 BIAS_WINDOW_DAYS 日の片づけで判定する（昔の偏りを、いつまでも引きずらないように）
+    const since = new Date(now.getTime() - BIAS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    return biasStage(await getRecentCleaningCounts(guildId, since), memberCount - 1);
   } catch (error) {
     console.error("片づけの偏りを判定できませんでした:", error);
     return "unknown";
@@ -199,7 +201,7 @@ export async function deliverPendingNotifications(
     const jobs = await getPendingNotificationJobs(guildId);
     if (jobs.length === 0) return 0;
 
-    await send(buildNotificationDigestMessages(jobs, await judgeBias(guildId, memberCount)));
+    await send(buildNotificationDigestMessages(jobs, await judgeBias(guildId, memberCount, sentAt)));
     await markNotificationJobsSent(jobs.map((job) => job.id), sentAt);
     return jobs.length;
   } finally {
