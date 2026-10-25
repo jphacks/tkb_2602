@@ -1,7 +1,7 @@
 import { supabase } from "./client.js";
 
 export type GuildSettings = {
-  notificationChannelId: string | null; // まとめ通知を送るチャンネル（#妖怪だより）
+  notificationChannelId: string | null; // まとめ通知を送るチャンネル（#毎日報告）
   adminChannelId: string | null; // 管理者に「ひとこと」を届けるチャンネル
   digestHour: number; // まとめ通知を送る時刻の「時」（0〜23）
   digestMinute: number; // まとめ通知を送る時刻の「分」（0 または 30）
