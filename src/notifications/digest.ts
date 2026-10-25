@@ -4,6 +4,7 @@ import type { Client } from "discord.js";
 import {
   getNotificationSchedules,
   getPendingNotificationJobs,
+  getYokaiHealth,
   markNotificationJobsSent,
   processYokaiAscensions,
   type PendingNotificationJob,
@@ -11,6 +12,7 @@ import {
 import { getNow } from "../time.js";
 import { getRecentCleaningCounts } from "../database/guardians.js";
 import { BIAS_WINDOW_DAYS, type BiasStage, biasDigestLines, biasStage } from "../logic/bias.js";
+import { ALL_CLEAR_LINES, CELEBRATION_WEEKDAY, isQuietWeek, QUIET_WEEK_MESSAGE } from "../logic/celebration.js";
 import { ASCEND_HINT, oharaiAdvice } from "../logic/oharai.js";
 import { displayYokaiName } from "./yokai-catalog.js";
 
@@ -50,6 +52,11 @@ function imagePath(imageKey: string | null, eventType: string): string | null {
   return existsSync(path) ? path : null;
 }
 
+// その国・地域の暦での曜日（"Mon" など）
+function weekday(now: Date, timezone: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(now);
+}
+
 function localDateAndTime(now: Date, timezone: string): { date: string; time: string } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -85,7 +92,12 @@ function normalizeNotificationTime(value: string): string {
 // 書くかどうかは自由。名前が出るのは、自分から書いた人だけ
 const ASCEND_SHARE = "🎉 同じことが起きなくなり、妖怪は成仏しました。置き場所を変えた、当番を決めたなど、効いた工夫があれば、このメッセージへの返信で研究室に共有しよう";
 
-export function formatNotificationDigest(jobs: PendingNotificationJob[], bias: BiasStage = "unknown"): string {
+export function formatNotificationDigest(
+  jobs: PendingNotificationJob[],
+  bias: BiasStage = "unknown",
+  // 成仏があって、研究室に妖怪がいなくなったか（健全な状態を祝う）
+  allClear = false,
+): string {
   const counts = new Map<string, number>();
   for (const job of jobs) {
     counts.set(job.eventType, (counts.get(job.eventType) ?? 0) + 1);
@@ -118,17 +130,19 @@ export function formatNotificationDigest(jobs: PendingNotificationJob[], bias: B
     ...(counts.has("ascend") ? ["", `-# ${ASCEND_SHARE}`] : []),
     // 片づけが一部の人に偏っているときは、偏りそのものを妖怪（かたより坊）として出す
     ...biasDigestLines(bias),
+    ...(allClear ? ALL_CLEAR_LINES : []),
   ].join("\n");
 }
 
 export function buildNotificationDigestMessages(
   jobs: PendingNotificationJob[],
   bias: BiasStage = "unknown",
+  allClear = false,
 ): NotificationMessage[] {
   const featured = jobs.filter((job) =>
     (job.eventType === "birth" || job.eventType === "ascend") && job.yokaiId
   );
-  if (featured.length === 0) return [{ content: formatNotificationDigest(jobs, bias) }];
+  if (featured.length === 0) return [{ content: formatNotificationDigest(jobs, bias, allClear) }];
 
   const messages: NotificationMessage[] = [];
   for (let from = 0; from < featured.length; from += 10) {
@@ -151,7 +165,7 @@ export function buildNotificationDigestMessages(
     });
     messages.push({
       content: from === 0
-        ? formatNotificationDigest(jobs, bias)
+        ? formatNotificationDigest(jobs, bias, allClear)
         : `## 👻 妖怪だより（画像 ${Math.floor(from / 10) + 1}）`,
       embeds,
       ...(files.length > 0 ? { files } : {}),
@@ -201,7 +215,14 @@ export async function deliverPendingNotifications(
     const jobs = await getPendingNotificationJobs(guildId);
     if (jobs.length === 0) return 0;
 
-    await send(buildNotificationDigestMessages(jobs, await judgeBias(guildId, memberCount, sentAt)));
+    // 成仏があったときだけ、研究室に妖怪がいなくなったかを確かめて祝う
+    const allClear = jobs.some((job) => job.eventType === "ascend")
+      ? await getYokaiHealth(guildId).then((health) => health.activeCount === 0, (error) => {
+        console.error("研究室の健全さを確かめられませんでした:", error);
+        return false;
+      })
+      : false;
+    await send(buildNotificationDigestMessages(jobs, await judgeBias(guildId, memberCount, sentAt), allClear));
     await markNotificationJobsSent(jobs.map((job) => job.id), sentAt);
     return jobs.length;
   } finally {
@@ -238,6 +259,13 @@ export async function runScheduledNotifications(
       );
       if (count > 0) {
         console.log(`[通知] Guild ${schedule.guildId}: ${count}件を送信しました`);
+      } else if (weekday(now, schedule.timezone) === CELEBRATION_WEEKDAY) {
+        // 伝える変化がない週1回の日に、新しい妖怪が生まれない1週間が続いていれば祝う
+        const health = await getYokaiHealth(schedule.guildId);
+        if (isQuietWeek(health, now)) {
+          const channel = await client.channels.fetch(schedule.channelId);
+          if (channel?.isSendable()) await channel.send({ content: QUIET_WEEK_MESSAGE, allowedMentions: { parse: [] } });
+        }
       }
     } catch (error) {
       handledSlots.delete(schedule.guildId);
