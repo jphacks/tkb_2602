@@ -19,15 +19,15 @@ import type { Command } from "./types.js";
 
 // /youkai-junbi：はじめての準備（1番）。管理者だけが使える
 //   ・3つのチャンネルを作る
-//     #お祓い係報告所（全員。/youkai で観測する場所）
+//     #お祓い係の控え室（全員。/youkai で観測し、/mamorigami で自分の守り神を見る場所）
 //     #毎日報告（全員。毎日のまとめ通知と /summary）
 //     #管理者（管理者とボットだけ。ひとこと）
-//   ・#毎日報告 と #管理者 を設定に入れる（#お祓い係報告所 は、カテゴリーの中の名前で探す）
+//   ・#毎日報告 と #管理者 を設定に入れる（#お祓い係の控え室 は、カテゴリーの中の名前で探す）
 //   ・場所・やり残されていたことの一覧が空なら、初期の一覧を入れる（あとで /youkai-settei で直せる）
 // 何度押しても、設定済みで今もあるチャンネルはそのまま使い、二重には作らない
 
 const CATEGORY_NAME = "妖怪だより";
-const REPORT_CHANNEL_NAME = "お祓い係報告所";
+const REPORT_CHANNEL_NAME = "お祓い係の控え室";
 const NOTIFY_CHANNEL_NAME = "毎日報告";
 const ADMIN_CHANNEL_NAME = "管理者";
 const DEFAULT_LOCATIONS = ["流し", "冷蔵庫", "ゴミ箱", "共用机", "実験台"];
@@ -47,7 +47,7 @@ export function welcomeMessage() {
       "研究室の「やり残されていたこと」を、誰も名指しせずに妖怪のしわざとして記録するボットです。",
       "",
       "**管理者の方** が下の「準備を始める」を押すと、次のものを用意します（`/youkai-junbi` でも同じです）。",
-      `・#${REPORT_CHANNEL_NAME}：全員が見られるチャンネル。ここで \`/youkai\` を使って観測します`,
+      `・#${REPORT_CHANNEL_NAME}：全員が見られるチャンネル。ここで \`/youkai\` で観測し、\`/mamorigami\` で自分の守り神を見ます`,
       `・#${NOTIFY_CHANNEL_NAME}：全員が見られるチャンネル。毎日のまとめ通知が届きます`,
       `・#${ADMIN_CHANNEL_NAME}：管理者とボットだけが見られるチャンネル。「ひとこと」が届きます`,
       "・場所と、やり残されていたことの初期の一覧（あとで `/youkai-settei` で変えられます）",
@@ -70,13 +70,13 @@ async function findOrCreateCategory(guild: Guild): Promise<CategoryChannel> {
   return found ?? (await guild.channels.create({ name: CATEGORY_NAME, type: ChannelType.GuildCategory }));
 }
 
-// /youkai を使う場所の案内（#お祓い係報告所 を作ったときに1回だけ送る）
+// /youkai を使う場所の案内（#お祓い係の控え室 を作ったときに1回だけ送る）
 const REPORT_GUIDE = [
-  "## 👻 ここは観測の報告所です",
+  "## 👻 ここはお祓い係の控え室です",
   "やり残されていたことに気づいて片づけたら、ここで `/youkai` を使って観測を記録してください。",
   "・返事はあなたにだけ見えます。誰が観測したかは、ほかの人にはわかりません",
   `・同じことが続くと、妖怪が生まれます。妖怪の変化は、毎日決まった時刻に #${NOTIFY_CHANNEL_NAME} でお知らせします`,
-  "・自分の守り神は `/mamorigami` で見られます",
+  "・`/mamorigami` で、自分の守り神とポイントを見られます（これもあなたにだけ見えます）",
 ].join("\n");
 
 // 観測のチャンネルは設定に保存しないので、カテゴリーの中から名前で探す。なければ作る
@@ -84,15 +84,15 @@ async function findOrCreateReportChannel(guild: Guild, category: CategoryChannel
   const found = guild.channels.cache.find(
     (c) => c.type === ChannelType.GuildText && c.name === REPORT_CHANNEL_NAME && c.parentId === category.id,
   );
-  if (found) return `・観測：<#${found.id}>（今あるチャンネルをそのまま使います）`;
+  if (found) return `・観測と守り神：<#${found.id}>（今あるチャンネルをそのまま使います）`;
   const channel = await guild.channels.create({
     name: REPORT_CHANNEL_NAME,
     type: ChannelType.GuildText,
     parent: category.id,
-    topic: "/youkai で観測を記録する場所です。返事はあなたにだけ見えます。",
+    topic: "/youkai で観測を記録し、/mamorigami で自分の守り神を見る場所です。返事はあなたにだけ見えます。",
   });
   await channel.send({ content: REPORT_GUIDE, allowedMentions: { parse: [] } });
-  return `・観測：<#${channel.id}> を作りました`;
+  return `・観測と守り神：<#${channel.id}> を作りました`;
 }
 
 async function setupGuild(guild: Guild, adminUserId: string): Promise<string> {
