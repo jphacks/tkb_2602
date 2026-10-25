@@ -409,8 +409,6 @@ CLOUDFLARE_API_TOKEN=
 
 詳細とDB単体テストは [src/database/README.md](src/database/README.md) を参照してください。
 
-雑務別の出現回数を含む設定保存へ更新する既存環境は、`sql/migrations/20261025_task_birth_threshold.sql` → 最新の `sql/functions/save_guild_settings.sql` → Botの更新・再起動の順で適用してください。一覧・全体の回数・雑務別の回数を1回のRPCで保存します。
-
 ### 3. Discordコマンドを登録して起動
 
 ```bash
