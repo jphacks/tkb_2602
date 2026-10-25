@@ -1,8 +1,19 @@
 # DB操作
 
+## 初期構築と更新
+
+新規DBは `sql/initial_schema.sql` で基本7テーブルを作成してから、[ルートREADMEの適用順](../../README.md#2-supabaseへsqlを適用)に従って更新SQLを実行します。
+初期スキーマは新規DB専用です。既存DBでは再実行しないでください。
+
+`sql/migrations/20261026_guild_jobutsu_days.sql` は初期定義の `decay_days` を `jobutsu_days` へ変更し、成仏処理と列名を揃えます。
+既存の値・既定値・正数制約を保持し、すでに `jobutsu_days` があればその設定を維持します。成仏判定関数より先に適用してください。
+
+適用後は `sql/checks/rls_status.sql` で、基本7テーブルと `guardian_cooldowns`・`pending_observations` のRLSが有効であることを確認できます。
+この確認SQLは状態を表示するだけで、DBの設定は変更しません。
+
 ## 設定画面からの保存
 
-### 最初にSupabaseへ適用するSQL
+### 設定保存に必要なSQL（基本テーブル作成済みのDB）
 
 1. Supabaseの対象プロジェクトでSQL Editorを開きます。
 2. `sql/functions/save_guild_settings.sql`の全文を貼り、Runを押します。
@@ -115,7 +126,7 @@ Bot起動中は1分ごとに各Guildの設定を確認し、`notification_time`�
 - `weaken`（弱ってきた）は、`process_yokai_ascensions` が最後の報告から成仏日数の半分を過ぎた妖怪に1回だけ作る。同じ判定で成仏する妖怪には作らない。
 - 未送信行が0件ならDiscordへ投稿しない。
 - Botが通知時刻の1分間を通して停止していた場合、その日の通知は翌日の指定時刻まで待つ。
-- 実DBへは、設定保存SQL、通知配信migration、PR #5のevent type migration、妖怪名・画像migration、成仏判定SQL、最新の報告関数の順で適用する。
+- 実DBへの適用順は、[ルートREADME](../../README.md#2-supabaseへsqlを適用)を参照する。
 
 ## 定期報告用のデータ取得
 
