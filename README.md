@@ -399,9 +399,12 @@ CLOUDFLARE_API_TOKEN=
 13. `sql/migrations/20261025_task_birth_threshold.sql`
 14. `sql/migrations/20261026_task_kind.sql`
 15. `sql/functions/submit_report.sql`
+16. `sql/migrations/20261025164820_normalize_notification_time.sql`
 
 成仏日数の列は、初期スキーマの `decay_days` から現在の関数が使う `jobutsu_days` へ、10番のSQLで既存値を保って変更します。
 すでに `jobutsu_days` があるDBでは、その設定を維持します。
+16番のSQLは、作成済みの `notification_time` にも既定値18:00と `NOT NULL` を設定し、NULLの行だけを18:00で補完します。設定済みの通知時刻は維持します。
+適用前後に `sql/checks/notification_time_status.sql` を実行すると、列定義・NULL件数と、他の設定を保持したことをハッシュで確認できます。
 適用後に `sql/checks/rls_status.sql` を実行し、基本7テーブルと `guardian_cooldowns`・`pending_observations` の `rls_enabled` がすべて `true` であることを確認します。
 
 詳細とDB単体テストは [src/database/README.md](src/database/README.md) を参照してください。

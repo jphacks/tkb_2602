@@ -8,6 +8,10 @@
 `sql/migrations/20261026_guild_jobutsu_days.sql` は初期定義の `decay_days` を `jobutsu_days` へ変更し、成仏処理と列名を揃えます。
 既存の値・既定値・正数制約を保持し、すでに `jobutsu_days` があればその設定を維持します。成仏判定関数より先に適用してください。
 
+`sql/migrations/20261025164820_normalize_notification_time.sql` は、作成済みの `notification_time` の既定値を18:00にし、NULLの行だけを18:00で補完して `NOT NULL` を設定します。指定済みの通知時刻と他の設定は保持します。
+`ADD COLUMN IF NOT EXISTS` では既存列の定義は変更されないため、既存DBにもこのmigrationを適用してください。再実行しても設定済みの時刻は変更しません。
+適用前後は `sql/checks/notification_time_status.sql` で確認します。適用後の `is_nullable` は `NO`、`null_time_count` は0になります。適用前の `expected_settings_hash` と適用後の `settings_hash` が一致すれば、NULLの18:00補完以外の設定が保持されています。
+
 適用後は `sql/checks/rls_status.sql` で、基本7テーブルと `guardian_cooldowns`・`pending_observations` のRLSが有効であることを確認できます。
 この確認SQLは状態を表示するだけで、DBの設定は変更しません。
 
@@ -20,7 +24,7 @@
 3. 成功後、変更したBotを再起動し、`/youkai-settei`を開きます。
 
 このSQLは既存テーブルに`notification_time`（通知時刻）を追加し、保存用のDB関数を作ります。
-既存の通知時刻は18:00になります。適用済みのSQLを再実行しても設定は初期化しません。
+通知時刻の列がなければ18:00を既定値として追加します。既存列のNULL補完・定義の統一には上記の通知時刻migrationを適用してください。適用済みのSQLを再実行しても設定は初期化しません。
 先にSQLを適用してください。未適用の状態では、設定画面の読み込み・保存でエラーになります。
 コマンド名・項目の登録内容は変えていないため、この変更だけなら`npm run deploy`は不要です。
 
@@ -185,3 +189,5 @@ DB側の保存処理は、SQL Editorで`sql/functions/tests/save_guild_settings_
 観測処理は`sql/functions/tests/submit_report_test.sql`、いつもの仕事の分岐は
 `sql/functions/tests/routine_report_test.sql`で確認できます。列追加SQLと最新の関数を先に適用してください。
 いつもの仕事のテストは、妖怪・通知を作らないこと、ポイントの1時間制限、二重送信、種類変更後の再送と既存妖怪の保持を検証し、最後にロールバックします。
+
+通知時刻migrationの適用後は `sql/functions/tests/notification_time_test.sql` で、既定値18:00・部分更新での設定保持・通知時刻の変更・明示的NULLの拒否を検証できます。最後にロールバックするため、テストデータは残りません。
