@@ -134,7 +134,7 @@ export const youkaiSettei: Command = {
           .setLabel("まとめ通知を送るチャンネル")
           .setDescription("研究室の全員がいるチャンネル。その日に出現した妖怪などを毎日まとめて送ります")
           .setChannelSelectMenuComponent(
-            channelMenu("youkai-settei:notify", "例：#妖怪だより", settings.notificationChannelId),
+            channelMenu("youkai-settei:notify", "例：#毎日報告", settings.notificationChannelId),
           ),
         new LabelBuilder()
           .setLabel("「ひとこと」を届けるチャンネル")
